@@ -1,9 +1,8 @@
 import { afterEach, afterAll, beforeAll } from 'vitest'
-import { readFileSync } from 'fs'
+import { readFileSync, readdirSync } from 'fs'
 import { join } from 'path'
 import { Pool } from 'pg'
 
-// Create a separate admin pool to bootstrap the test database
 const adminPool = new Pool({
   connectionString: 'postgres://cthru:cthru@localhost:5433/postgres',
 })
@@ -11,7 +10,6 @@ const adminPool = new Pool({
 let testPool: Pool
 
 beforeAll(async () => {
-  // Create cthru_test database if it doesn't exist
   await adminPool.query(`
     SELECT pg_terminate_backend(pid)
     FROM pg_stat_activity
@@ -25,20 +23,25 @@ beforeAll(async () => {
   }
   await adminPool.end()
 
-  // Run migrations against cthru_test
   testPool = new Pool({
     connectionString: 'postgres://cthru:cthru@localhost:5433/cthru_test',
   })
-  const migration = readFileSync(
-    join(process.cwd(), 'migrations/001_events.sql'),
-    'utf-8'
-  )
-  await testPool.query(migration)
+
+  // Run all migrations in filename order
+  const migrationsDir = join(process.cwd(), 'migrations')
+  const files = readdirSync(migrationsDir)
+    .filter(f => f.endsWith('.sql'))
+    .sort()
+
+  for (const file of files) {
+    const sql = readFileSync(join(migrationsDir, file), 'utf-8')
+    await testPool.query(sql)
+  }
+
   await testPool.end()
 })
 
 afterEach(async () => {
-  // Import db lazily so it picks up the DATABASE_URL set by vitest
   const { db } = await import('../db')
   await db.query('TRUNCATE TABLE events RESTART IDENTITY')
 })
