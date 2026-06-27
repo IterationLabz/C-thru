@@ -14,7 +14,10 @@ export default async function DashboardPage() {
   return (
     <main className="min-h-screen bg-gray-50 p-8">
       <div className="max-w-5xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-900 mb-8">C-thru</h1>
+        <div className="flex items-center justify-between mb-8">
+          <h1 className="text-2xl font-bold text-gray-900">C-thru</h1>
+          <a href="/settings" className="text-sm text-gray-500 hover:text-gray-800 transition-colors">Settings →</a>
+        </div>
 
         {/* Metric cards */}
         <div className="grid grid-cols-2 gap-6 mb-10 lg:grid-cols-4">
