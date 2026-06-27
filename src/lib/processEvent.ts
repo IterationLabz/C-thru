@@ -1,9 +1,11 @@
 import { db } from './db'
 import { validateTimestamp } from './validateTimestamp'
+import { deriveAnonymousId } from './deriveAnonymousId'
 import type { RawEvent } from '@/types/events'
 
 export async function processEvent(event: RawEvent): Promise<void> {
   const { suspect } = validateTimestamp(event.occurredAt, event.source)
+  const anonymousId = deriveAnonymousId(event)
 
   await db.query(
     `INSERT INTO events
@@ -13,7 +15,7 @@ export async function processEvent(event: RawEvent): Promise<void> {
     [
       event.name,
       event.source,
-      event.anonymousId,
+      anonymousId,
       event.occurredAt,
       suspect,
       JSON.stringify(event.properties ?? {}),
