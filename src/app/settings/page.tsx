@@ -1,10 +1,14 @@
 import { listKeyEvents } from '@/lib/keyEvents'
-import { addKeyEventAction, deleteKeyEventAction } from './actions'
+import { listBlockedDomains } from '@/lib/blockedDomains'
+import { addKeyEventAction, deleteKeyEventAction, addBlockedDomainAction, removeBlockedDomainAction } from './actions'
 
 export const dynamic = 'force-dynamic'
 
 export default async function SettingsPage() {
-  const keyEvents = await listKeyEvents()
+  const [keyEvents, blockedDomains] = await Promise.all([
+    listKeyEvents(),
+    listBlockedDomains(),
+  ])
 
   return (
     <main className="min-h-screen bg-gray-50 p-8">
@@ -17,13 +21,14 @@ export default async function SettingsPage() {
 
         <h1 className="text-2xl font-bold text-gray-900 mb-8">Settings</h1>
 
-        <section>
+        {/* Key events */}
+        <section className="mb-12">
           <h2 className="text-base font-semibold text-gray-700 mb-1">Key events</h2>
           <p className="text-sm text-gray-400 mb-4">
-            Mark events that signal meaningful product milestones — e.g. <code className="bg-gray-100 px-1 rounded">payment_succeeded</code>.
+            Mark events that signal meaningful product milestones — e.g.{' '}
+            <code className="bg-gray-100 px-1 rounded">payment_succeeded</code>.
           </p>
 
-          {/* Add form */}
           <form action={addKeyEventAction} className="flex gap-2 mb-6">
             <input
               type="text"
@@ -41,7 +46,6 @@ export default async function SettingsPage() {
             </button>
           </form>
 
-          {/* List */}
           {keyEvents.length === 0 ? (
             <p className="text-sm text-gray-400">No key events defined yet.</p>
           ) : (
@@ -51,10 +55,49 @@ export default async function SettingsPage() {
                   <span className="font-mono text-sm text-gray-800">{e.name}</span>
                   <form action={deleteKeyEventAction}>
                     <input type="hidden" name="name" value={e.name} />
-                    <button
-                      type="submit"
-                      className="text-xs text-red-400 hover:text-red-600 transition-colors"
-                    >
+                    <button type="submit" className="text-xs text-red-400 hover:text-red-600 transition-colors">
+                      Remove
+                    </button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+
+        {/* Blocked domains */}
+        <section>
+          <h2 className="text-base font-semibold text-gray-700 mb-1">Blocked domains</h2>
+          <p className="text-sm text-gray-400 mb-4">
+            Emails from these domains are treated as personal and excluded from company grouping.
+          </p>
+
+          <form action={addBlockedDomainAction} className="flex gap-2 mb-6">
+            <input
+              type="text"
+              name="domain"
+              required
+              placeholder="gmail.com"
+              className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-400"
+            />
+            <button
+              type="submit"
+              className="bg-gray-900 text-white text-sm px-4 py-2 rounded hover:bg-gray-700 transition-colors"
+            >
+              Add
+            </button>
+          </form>
+
+          {blockedDomains.length === 0 ? (
+            <p className="text-sm text-gray-400">No blocked domains.</p>
+          ) : (
+            <ul className="space-y-1">
+              {blockedDomains.map(domain => (
+                <li key={domain} className="flex items-center justify-between bg-white border border-gray-200 rounded px-4 py-2">
+                  <span className="font-mono text-sm text-gray-800">{domain}</span>
+                  <form action={removeBlockedDomainAction}>
+                    <input type="hidden" name="domain" value={domain} />
+                    <button type="submit" className="text-xs text-red-400 hover:text-red-600 transition-colors">
                       Remove
                     </button>
                   </form>
