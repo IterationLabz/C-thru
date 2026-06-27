@@ -5,6 +5,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, './src'),
+      '@cthru/node': resolve(__dirname, './packages/node-sdk/src/index.ts'),
     },
   },
   test: {
