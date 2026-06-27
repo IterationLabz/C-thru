@@ -35,9 +35,21 @@ function resolveModel(provider: string, model: string, key: string) {
   }
 }
 
+export async function verifyKey(): Promise<void> {
+  const key = process.env.CTHRU_LLM_KEY
+  if (!key) throw new Error('CTHRU_LLM_KEY is not configured')
+
+  const provider = process.env.CTHRU_LLM_PROVIDER ?? 'anthropic'
+  const model = process.env.CTHRU_LLM_MODEL ?? 'claude-haiku-4-5-20251001'
+  const resolvedModel = resolveModel(provider, model, key)
+
+  // Near-zero-cost check — just confirms the key is accepted
+  await generateText({ model: resolvedModel, prompt: 'Reply with just "OK"' })
+}
+
 function extractSql(raw: string): string {
   // Strip markdown code fences: ```sql ... ``` or ``` ... ```
   const fenced = raw.match(/```(?:sql)?\s*([\s\S]*?)```/i)
-  if (fenced) return fenced[1].trim()
+  if (fenced?.[1]) return fenced[1].trim()
   return raw.trim()
 }

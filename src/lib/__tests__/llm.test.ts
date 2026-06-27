@@ -61,7 +61,7 @@ describe('lib/llm generateSql', () => {
     const { generateSql } = await import('../llm')
     await generateSql('how many users?', 'signups_v: user_id, signed_up_at')
 
-    const call = mockGenerateText.mock.calls[0][0]
+    const call = mockGenerateText.mock.calls[0]![0]
     const prompt = JSON.stringify(call)
     expect(prompt).toContain('how many users?')
     expect(prompt).toContain('signups_v: user_id, signed_up_at')
