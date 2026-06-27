@@ -24,7 +24,7 @@ export async function getActiveUsers(): Promise<ActiveUsers> {
     JOIN aliases a ON e.anonymous_id = a.anonymous_id
     WHERE a.user_id IS NOT NULL
   `)
-  const row = rows[0]
+  const row = rows[0] ?? { last7: '0', last30: '0' }
   return {
     last7: parseInt(row.last7, 10),
     last30: parseInt(row.last30, 10),
@@ -38,7 +38,7 @@ export async function getNewSignups(): Promise<NewSignups> {
       COUNT(*) FILTER (WHERE first_seen >= NOW() - INTERVAL '30 days') AS last30
     FROM users
   `)
-  const row = rows[0]
+  const row = rows[0] ?? { last7: '0', last30: '0' }
   return {
     last7: parseInt(row.last7, 10),
     last30: parseInt(row.last30, 10),
@@ -56,11 +56,33 @@ export async function getTopEvents(): Promise<TopEvent[]> {
   return rows.map(r => ({ name: r.name, count: parseInt(r.count, 10) }))
 }
 
+export interface TopCompany {
+  domain: string
+  eventCount: number
+}
+
+export async function getTopCompanies(): Promise<TopCompany[]> {
+  const { rows } = await db.query<{ domain: string; event_count: string }>(`
+    SELECT company_domain AS domain, COUNT(*) AS event_count
+    FROM events_v
+    WHERE company_domain IS NOT NULL
+    GROUP BY company_domain
+    ORDER BY event_count DESC
+    LIMIT 25
+  `)
+  return rows.map(r => ({ domain: r.domain, eventCount: parseInt(r.event_count, 10) }))
+}
+
+export function formatDomain(domain: string): string {
+  const sld = domain.split('.')[0] ?? domain
+  return sld.charAt(0).toUpperCase() + sld.slice(1)
+}
+
 export async function getLiveCount(): Promise<number> {
   const { rows } = await db.query<{ count: string }>(`
     SELECT COUNT(*) AS count
     FROM events
     WHERE received_at >= NOW() - INTERVAL '60 seconds'
   `)
-  return parseInt(rows[0].count, 10)
+  return parseInt(rows[0]?.count ?? '0', 10)
 }
