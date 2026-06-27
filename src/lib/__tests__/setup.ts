@@ -43,7 +43,9 @@ beforeAll(async () => {
 
 afterEach(async () => {
   const { db } = await import('../db')
-  await db.query('TRUNCATE TABLE events RESTART IDENTITY')
+  await db.query('TRUNCATE TABLE events, users, companies, aliases RESTART IDENTITY')
+  const { resetRateLimit } = await import('../rateLimit')
+  resetRateLimit()
 })
 
 afterAll(async () => {

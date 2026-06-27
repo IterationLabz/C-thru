@@ -16,6 +16,7 @@ export default defineConfig({
       DATABASE_URL: 'postgres://cthru:cthru@localhost:5433/cthru_test',
       CTHRU_WRITE_KEY: 'test-write-key',
       CTHRU_SERVER_KEY: 'test-server-key',
+      CTHRU_RATE_LIMIT: '3',
     },
   },
 })

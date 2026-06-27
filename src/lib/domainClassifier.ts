@@ -15,7 +15,8 @@ async function getBlockedSet(): Promise<Set<string>> {
 export async function classifyDomain(email: string): Promise<{ companyDomain: string | null }> {
   if (!email.includes('@')) return { companyDomain: null }
 
-  const domain = email.split('@')[1].toLowerCase()
+  const domain = email.split('@')[1]?.toLowerCase()
+  if (!domain) return { companyDomain: null }
   const blocked = await getBlockedSet()
 
   if (blocked.has(domain)) return { companyDomain: null }
