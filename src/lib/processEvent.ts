@@ -1,17 +1,21 @@
 import { db } from './db'
+import { validateTimestamp } from './validateTimestamp'
 import type { RawEvent } from '@/types/events'
 
 export async function processEvent(event: RawEvent): Promise<void> {
+  const { suspect } = validateTimestamp(event.occurredAt, event.source)
+
   await db.query(
     `INSERT INTO events
-       (name, source, anonymous_id, occurred_at, properties,
+       (name, source, anonymous_id, occurred_at, occurred_at_suspect, properties,
         user_id, email, session_id, url, referrer, device)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)`,
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)`,
     [
       event.name,
       event.source,
       event.anonymousId,
       event.occurredAt,
+      suspect,
       JSON.stringify(event.properties ?? {}),
       event.userId ?? null,
       event.email ?? null,
