@@ -1,13 +1,14 @@
-import { getActiveUsers, getNewSignups, getTopEvents, getLiveCount } from '@/lib/dashboardQueries'
+import { getActiveUsers, getNewSignups, getTopEvents, getLiveCount, getTopCompanies, formatDomain } from '@/lib/dashboardQueries'
 
 export const dynamic = 'force-dynamic'
 
 export default async function DashboardPage() {
-  const [activeUsers, newSignups, topEvents, liveCount] = await Promise.all([
+  const [activeUsers, newSignups, topEvents, liveCount, topCompanies] = await Promise.all([
     getActiveUsers(),
     getNewSignups(),
     getTopEvents(),
     getLiveCount(),
+    getTopCompanies(),
   ])
 
   return (
@@ -38,6 +39,35 @@ export default async function DashboardPage() {
             sub="events ingested"
           />
         </div>
+
+        {/* Companies */}
+        <section className="mb-10">
+          <h2 className="text-base font-semibold text-gray-700 mb-3">Companies</h2>
+          {topCompanies.length === 0 ? (
+            <p className="text-sm text-gray-400">No company events yet.</p>
+          ) : (
+            <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b border-gray-100 bg-gray-50">
+                    <th className="text-left px-4 py-2 font-medium text-gray-500">Company</th>
+                    <th className="text-left px-4 py-2 font-medium text-gray-500 hidden sm:table-cell">Domain</th>
+                    <th className="text-right px-4 py-2 font-medium text-gray-500">Events</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {topCompanies.map((c, i) => (
+                    <tr key={c.domain} className={i % 2 === 0 ? '' : 'bg-gray-50'}>
+                      <td className="px-4 py-2 text-gray-800 font-medium">{formatDomain(c.domain)}</td>
+                      <td className="px-4 py-2 text-gray-400 font-mono text-xs hidden sm:table-cell">{c.domain}</td>
+                      <td className="px-4 py-2 text-right text-gray-600">{c.eventCount.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </section>
 
         {/* Top events */}
         <section>
