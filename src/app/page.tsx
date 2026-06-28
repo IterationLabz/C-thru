@@ -1,8 +1,24 @@
 import { getActiveUsers, getNewSignups, getTopEvents, getLiveCount, getTopCompanies, formatDomain } from '@/lib/dashboardQueries'
+import { listPinnedQueries } from '@/lib/pinnedQueries'
+import { validateAndRun, QueryResult } from '@/lib/sqlGuard'
+import { unpinQueryAction } from '@/app/ask/actions'
 
 export const dynamic = 'force-dynamic'
 
 export default async function DashboardPage() {
+  const pinnedQueries = await listPinnedQueries()
+
+  const pinnedResults = await Promise.all(
+    pinnedQueries.map(async (pq) => {
+      try {
+        const result = await validateAndRun(pq.sql)
+        return { pq, result, error: null }
+      } catch (e) {
+        return { pq, result: null as QueryResult | null, error: e instanceof Error ? e.message : 'Error' }
+      }
+    })
+  )
+
   const [activeUsers, newSignups, topEvents, liveCount, topCompanies] = await Promise.all([
     getActiveUsers(),
     getNewSignups(),
@@ -16,7 +32,10 @@ export default async function DashboardPage() {
       <div className="max-w-5xl mx-auto">
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-2xl font-bold text-gray-900">C-thru</h1>
-          <a href="/settings" className="text-sm text-gray-500 hover:text-gray-800 transition-colors">Settings →</a>
+          <div className="flex items-center gap-4">
+            <a href="/ask" className="text-sm text-gray-500 hover:text-gray-800 transition-colors">Ask →</a>
+            <a href="/settings" className="text-sm text-gray-500 hover:text-gray-800 transition-colors">Settings →</a>
+          </div>
         </div>
 
         {/* Metric cards */}
@@ -98,6 +117,34 @@ export default async function DashboardPage() {
             </div>
           )}
         </section>
+
+        {/* Pinned questions */}
+        {pinnedResults.length > 0 && (
+          <section className="mt-10">
+            <h2 className="text-base font-semibold text-gray-700 mb-3">Pinned questions</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {pinnedResults.map(({ pq, result, error }) => (
+                <div key={pq.id} className="bg-white rounded-lg border border-gray-200 p-5">
+                  <p className="text-xs text-gray-500 mb-2 leading-snug">{pq.question}</p>
+                  {error ? (
+                    <p className="text-sm text-red-600">{error}</p>
+                  ) : result && result.rows.length === 1 && Object.keys(result.rows[0]!).length === 1 ? (
+                    <p className="text-3xl font-bold text-gray-900 tabular-nums">
+                      {String(Object.values(result.rows[0]!)[0])}
+                    </p>
+                  ) : result ? (
+                    <p className="text-sm text-gray-600">{result.rowCount} row{result.rowCount === 1 ? '' : 's'}</p>
+                  ) : null}
+                  <form action={unpinQueryAction.bind(null, pq.id)} className="mt-3">
+                    <button type="submit" className="text-xs text-gray-400 hover:text-red-500 transition-colors">
+                      Unpin
+                    </button>
+                  </form>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
       </div>
     </main>
   )

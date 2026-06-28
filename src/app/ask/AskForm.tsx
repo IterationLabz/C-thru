@@ -3,6 +3,7 @@
 import { useState, useTransition } from 'react'
 import type { AskResult } from '@/lib/ask'
 import type { Trend } from '@/lib/trendComputer'
+import { pinQueryAction } from './actions'
 
 type State =
   | { status: 'idle' }
@@ -60,6 +61,7 @@ export function AskForm({ hasLlmKey }: { hasLlmKey: boolean }) {
   const [question, setQuestion] = useState('')
   const [state, setState] = useState<State>({ status: 'idle' })
   const [isPending, startTransition] = useTransition()
+  const [pinned, setPinned] = useState(false)
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
@@ -69,6 +71,7 @@ export function AskForm({ hasLlmKey }: { hasLlmKey: boolean }) {
     setState({ status: 'loading' })
     startTransition(async () => {
       try {
+        setPinned(false)
         const res = await fetch('/api/ask', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -173,13 +176,20 @@ export function AskForm({ hasLlmKey }: { hasLlmKey: boolean }) {
 
             {/* Pin */}
             <section>
-              <button
-                type="button"
-                onClick={() => alert('Pin to Dashboard coming in the next release.')}
-                className="text-sm border border-gray-300 rounded px-4 py-2 hover:bg-gray-50 transition-colors text-gray-700"
-              >
-                Pin to Dashboard
-              </button>
+              {pinned ? (
+                <p className="text-sm text-green-700">Pinned to dashboard.</p>
+              ) : (
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await pinQueryAction(result.question, result.sql)
+                    setPinned(true)
+                  }}
+                  className="text-sm border border-gray-300 rounded px-4 py-2 hover:bg-gray-50 transition-colors text-gray-700"
+                >
+                  Pin to Dashboard
+                </button>
+              )}
             </section>
           </div>
         )
