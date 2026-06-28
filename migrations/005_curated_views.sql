@@ -48,8 +48,12 @@ GROUP BY a.user_id, u.email, bd.domain;
 -- company_activity_v: one row per company domain, personal domains excluded.
 -- Uses COALESCE(e.company_domain, a.company_domain) for retroactive attribution:
 -- pre-login events (e.company_domain = NULL) get attributed to the company once
--- the user identifies and the alias is populated. Both columns are already NULL
--- for personal/blocked domains (set by classifyDomain at ingestion time).
+-- the user identifies and the alias is populated.
+-- The blocked_domains join filters on the COALESCE'd result so that:
+--   (a) domains added to the blocklist after ingestion are immediately excluded
+--       (consistent with signups_v / active_users_v which classify at query time), and
+--   (b) retroactive attribution still works — pre-login events are attributed first
+--       via COALESCE, then the blocklist is checked on that resolved domain.
 -- last_event_at uses received_at for consistency with active_users_v.
 -- identified_users counts distinct user_ids (NULLs excluded by COUNT DISTINCT).
 CREATE OR REPLACE VIEW company_activity_v AS
@@ -61,7 +65,10 @@ SELECT
   COUNT(DISTINCT a.user_id)                       AS identified_users
 FROM events_v e
 LEFT JOIN aliases a ON e.anonymous_id = a.anonymous_id
+LEFT JOIN blocked_domains bd
+  ON bd.domain = COALESCE(e.company_domain, a.company_domain)
 WHERE COALESCE(e.company_domain, a.company_domain) IS NOT NULL
+  AND bd.domain IS NULL
 GROUP BY COALESCE(e.company_domain, a.company_domain);
 
 -- cthru_readonly: read-only Postgres role for executing LLM-generated queries.

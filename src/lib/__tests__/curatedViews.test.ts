@@ -347,4 +347,71 @@ describe('curated views', () => {
       }
     })
   })
+
+  describe('blocklist consistency across all three views', () => {
+    it('all three views exclude a domain immediately after it is added to blocked_domains', async () => {
+      const now = new Date().toISOString()
+
+      // Seed an identified user from newco.com (not yet blocked)
+      await processEvent({
+        name: 'pageview',
+        source: 'auto',
+        anonymousId: 'anon-bl-1',
+        occurredAt: now,
+        userId: 'user-bl-1',
+        email: 'alice@newco.com',
+      })
+      // Also seed a pre-login event so retroactive attribution via COALESCE is exercised
+      await processEvent({
+        name: 'pageview',
+        source: 'auto',
+        anonymousId: 'anon-bl-pre',
+        occurredAt: now,
+        // no userId — anonymous visitor from newco.com (company_domain set at ingestion)
+      })
+      // Manually set company_domain on the anonymous event to simulate pre-login attribution
+      await db.query(
+        "UPDATE events SET company_domain = 'newco.com' WHERE anonymous_id = 'anon-bl-pre'"
+      )
+
+      // Before block: all three views should see newco.com
+      const beforeSignups = await db.query("SELECT * FROM signups_v WHERE company_domain = 'newco.com'")
+      const beforeActive  = await db.query("SELECT * FROM active_users_v WHERE company_domain = 'newco.com'")
+      const beforeCompany = await db.query("SELECT * FROM company_activity_v WHERE domain = 'newco.com'")
+      expect(beforeSignups.rows.length).toBeGreaterThan(0)
+      expect(beforeActive.rows.length).toBeGreaterThan(0)
+      expect(beforeCompany.rows.length).toBeGreaterThan(0)
+
+      // Add newco.com to the blocklist
+      await db.query("INSERT INTO blocked_domains (domain) VALUES ('newco.com') ON CONFLICT DO NOTHING")
+
+      // After block: all three views must immediately agree — newco.com gone from all
+      const afterSignups = await db.query("SELECT * FROM signups_v WHERE company_domain = 'newco.com'")
+      const afterActive  = await db.query("SELECT * FROM active_users_v WHERE company_domain = 'newco.com'")
+      const afterCompany = await db.query("SELECT * FROM company_activity_v WHERE domain = 'newco.com'")
+      expect(afterSignups.rows).toHaveLength(0)
+      expect(afterActive.rows).toHaveLength(0)
+      expect(afterCompany.rows).toHaveLength(0)
+    })
+
+    it('retroactive attribution still works for a non-blocked domain', async () => {
+      const now = new Date().toISOString()
+
+      // Anonymous pre-login event — company_domain set at ingestion (by UPDATE to simulate)
+      await processEvent({
+        name: 'pageview',
+        source: 'auto',
+        anonymousId: 'anon-retro-1',
+        occurredAt: now,
+      })
+      await db.query(
+        "UPDATE events SET company_domain = 'retro.io' WHERE anonymous_id = 'anon-retro-1'"
+      )
+
+      // company_activity_v should show retro.io even though the user is anonymous
+      const { rows } = await db.query("SELECT * FROM company_activity_v WHERE domain = 'retro.io'")
+      expect(rows.length).toBeGreaterThan(0)
+      expect(rows[0].domain).toBe('retro.io')
+    })
+  })
 })
