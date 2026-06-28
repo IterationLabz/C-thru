@@ -268,3 +268,15 @@ Additionally: SQL is validated against a table/column allowlist before execution
 **Why a single `lib/llm.ts` module:** (a) the SDK becomes a swappable implementation detail — if it changes API or gets abandoned, one file changes, not every call site; (b) all v0.2 correctness guards (AST validation, curated-view constraint, schema-context injection, model selection) live in one place — one module to enforce, one place to test; (c) testable by mocking `lib/llm.ts` without burning real API calls.
 
 **Dependency decision principle (explicit):** take a dependency when it solves a moving-target problem maintained better externally than internally. Provider APIs are exactly that. This is the same rule applied differently from other v0.2 choices: key storage (thin threat model → simpler), SQL validation (thickest threat model → stronger AST parser), provider abstraction (external moving target → take the SDK).
+
+---
+
+## D-18 — company_activity_v: query-time blocklist check, not ingestion-time
+
+**Decision:** `company_activity_v` applies a `LEFT JOIN blocked_domains` on the COALESCE'd result (`COALESCE(e.company_domain, a.company_domain)`) with `AND bd.domain IS NULL`, making blocked-domain filtering happen at query time — the same moment as `signups_v` and `active_users_v`.
+
+**The problem this solves:** before this fix, `e.company_domain` and `a.company_domain` were frozen at ingestion time by `classifyDomain()`. Adding a domain to the blocklist immediately removed it from `signups_v`/`active_users_v` (which join `blocked_domains` live), but left it visible in `company_activity_v` (which used the ingestion-frozen values). This caused contradictory LLM answers: "how many companies were active?" vs "how many companies signed up?" could disagree on the same domain — a silent trust failure.
+
+**Why the join is on COALESCE, not on the raw columns:** retroactive attribution of pre-login events must still work. A pre-login event has `e.company_domain = NULL`; the company is attributed via `a.company_domain` once the user identifies. The blocked-domain check must apply AFTER this attribution resolves, not before — otherwise the COALESCE logic is undermined for blocked domains that happen to have pre-login events.
+
+**Behaviour after this fix:** adding a domain to `blocked_domains` immediately removes it from all three views on the next query. Removing a domain from the blocklist immediately restores it. Historical events are re-attributed on every query — there is no stale ingestion-frozen state to clean up.
