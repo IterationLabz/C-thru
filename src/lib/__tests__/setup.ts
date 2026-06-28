@@ -43,10 +43,13 @@ beforeAll(async () => {
 
 afterEach(async () => {
   const { db } = await import('../db')
-  await db.query('TRUNCATE TABLE events, users, companies, aliases, key_events, blocked_domains, pinned_queries RESTART IDENTITY')
+  await db.query('TRUNCATE TABLE events, users, companies, aliases, key_events, blocked_domains, pinned_queries, readiness_rules RESTART IDENTITY')
   // Re-seed blocked_domains from migration
   const seedSql = readFileSync(join(process.cwd(), 'migrations', '002_blocked_domains.sql'), 'utf-8')
   await db.query(seedSql)
+  // Re-seed readiness_rules default rows
+  const rulesSeedSql = readFileSync(join(process.cwd(), 'migrations', '008_readiness_rules.sql'), 'utf-8')
+  await db.query(rulesSeedSql)
   // Reset in-memory domain classifier cache to reflect restored seed data
   const { refreshBlockedDomains } = await import('../domainClassifier')
   await refreshBlockedDomains()
