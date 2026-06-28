@@ -1,5 +1,14 @@
 import { db } from './db'
 
+export interface SavedFunnel {
+  id: number
+  name: string
+  mode: 'user' | 'company'
+  windowDays: number
+  steps: FunnelStep[]
+  createdAt: string
+}
+
 export interface FunnelStep {
   eventName: string
 }
@@ -137,4 +146,53 @@ export async function evaluateFunnel(input: FunnelInput): Promise<FunnelResult> 
   })
 
   return { steps: stepResults, mode }
+}
+
+// saveFunnel — persist a named funnel definition (steps by position).
+export async function saveFunnel(
+  name: string,
+  mode: 'user' | 'company',
+  windowDays: number,
+  steps: FunnelStep[]
+): Promise<SavedFunnel> {
+  const { rows } = await db.query<{ id: number; created_at: string }>(
+    `INSERT INTO funnels (name, mode, window_days) VALUES ($1, $2, $3) RETURNING id, created_at`,
+    [name, mode, windowDays]
+  )
+  const { id, created_at } = rows[0]!
+  for (let i = 0; i < steps.length; i++) {
+    await db.query(
+      `INSERT INTO funnel_steps (funnel_id, position, event_name) VALUES ($1, $2, $3)`,
+      [id, i, steps[i]!.eventName]
+    )
+  }
+  return { id, name, mode, windowDays, steps, createdAt: created_at }
+}
+
+// listFunnels — fetch all saved funnels with their ordered steps.
+export async function listFunnels(): Promise<SavedFunnel[]> {
+  const { rows: funnelRows } = await db.query<{
+    id: number; name: string; mode: string; window_days: number; created_at: string
+  }>(`SELECT id, name, mode, window_days, created_at FROM funnels ORDER BY created_at DESC`)
+
+  if (funnelRows.length === 0) return []
+
+  const ids = funnelRows.map(f => f.id)
+  const { rows: stepRows } = await db.query<{
+    funnel_id: number; position: number; event_name: string
+  }>(`SELECT funnel_id, position, event_name FROM funnel_steps WHERE funnel_id = ANY($1::int[]) ORDER BY funnel_id, position`, [ids])
+
+  return funnelRows.map(f => ({
+    id: f.id,
+    name: f.name,
+    mode: f.mode as 'user' | 'company',
+    windowDays: f.window_days,
+    steps: stepRows.filter(s => s.funnel_id === f.id).map(s => ({ eventName: s.event_name })),
+    createdAt: f.created_at,
+  }))
+}
+
+// deleteFunnel — remove a saved funnel (steps cascade via FK).
+export async function deleteFunnel(id: number): Promise<void> {
+  await db.query(`DELETE FROM funnels WHERE id = $1`, [id])
 }

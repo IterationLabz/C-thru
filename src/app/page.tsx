@@ -36,6 +36,7 @@ export default async function DashboardPage() {
             <a href="/ask" className="text-sm text-gray-500 hover:text-gray-800 transition-colors">Ask →</a>
             <a href="/accounts" className="text-sm text-gray-500 hover:text-gray-800 transition-colors">Accounts →</a>
             <a href="/brief" className="text-sm text-gray-500 hover:text-gray-800 transition-colors">Brief →</a>
+            <a href="/funnels" className="text-sm text-gray-500 hover:text-gray-800 transition-colors">Funnels →</a>
             <a href="/settings" className="text-sm text-gray-500 hover:text-gray-800 transition-colors">Settings →</a>
           </div>
         </div>

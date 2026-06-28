@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { validateFunnelSteps, evaluateFunnel } from '../funnelEngine'
+import { validateFunnelSteps, evaluateFunnel, saveFunnel, listFunnels, deleteFunnel } from '../funnelEngine'
 import { processEvent } from '../processEvent'
 
 const now = () => new Date(Date.now() - 1000).toISOString()
@@ -119,5 +119,33 @@ describe('evaluateFunnel — injection safety', () => {
     })
     // Should return 0 (event never fired) without crashing
     expect(result.steps[0]!.count).toBe(0)
+  })
+})
+
+describe('funnel persistence — save / list / delete', () => {
+  it('saves a funnel and retrieves it via listFunnels', async () => {
+    const steps = [{ eventName: 'signup' }, { eventName: 'activate' }]
+    const saved = await saveFunnel('Onboarding', 'user', 30, steps)
+    expect(saved.id).toBeGreaterThan(0)
+    expect(saved.name).toBe('Onboarding')
+    expect(saved.steps).toHaveLength(2)
+
+    const all = await listFunnels()
+    const found = all.find(f => f.id === saved.id)
+    expect(found).toBeDefined()
+    expect(found!.steps[0]!.eventName).toBe('signup')
+    expect(found!.steps[1]!.eventName).toBe('activate')
+  })
+
+  it('listFunnels returns empty array when no funnels saved', async () => {
+    const all = await listFunnels()
+    expect(all).toHaveLength(0)
+  })
+
+  it('deleteFunnel removes funnel and its steps', async () => {
+    const saved = await saveFunnel('Temp', 'company', 14, [{ eventName: 'click' }])
+    await deleteFunnel(saved.id)
+    const all = await listFunnels()
+    expect(all.find(f => f.id === saved.id)).toBeUndefined()
   })
 })
