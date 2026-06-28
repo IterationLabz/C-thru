@@ -1,4 +1,14 @@
 import { parse, Statement } from 'pgsql-ast-parser'
+import { db } from './db'
+
+export interface QueryResult {
+  rows: Record<string, unknown>[]
+  rowCount: number
+  sql: string
+}
+
+const STATEMENT_TIMEOUT_MS = 5000
+const DEFAULT_LIMIT = 500
 
 const ALLOWED_VIEWS = new Set([
   'signups_v',
@@ -6,6 +16,31 @@ const ALLOWED_VIEWS = new Set([
   'company_activity_v',
   'events_v',
 ])
+
+export async function validateAndRun(sql: string): Promise<QueryResult> {
+  validateSql(sql)
+
+  const limitedSql = /\blimit\b/i.test(sql) ? sql : `${sql}\nLIMIT ${DEFAULT_LIMIT}`
+
+  const client = await db.connect()
+  try {
+    await client.query('BEGIN')
+    await client.query('SET LOCAL ROLE cthru_readonly')
+    await client.query(`SET LOCAL statement_timeout = '${STATEMENT_TIMEOUT_MS}'`)
+    const result = await client.query(limitedSql)
+    await client.query('ROLLBACK')
+    return {
+      rows: result.rows as Record<string, unknown>[],
+      rowCount: result.rowCount ?? result.rows.length,
+      sql: limitedSql,
+    }
+  } catch (e) {
+    try { await client.query('ROLLBACK') } catch { /* best effort */ }
+    throw e
+  } finally {
+    client.release()
+  }
+}
 
 export function validateSql(sql: string): string {
   let stmts: Statement[]
