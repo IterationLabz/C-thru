@@ -1,15 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { writeSession } from '@/lib/replay/storage'
+import { getReplaySettings } from '@/lib/replay/consentGate'
 
 // POST /api/ingest/replay — receives gzip-compressed recording payload from
 // the snippet buffer. Validates write key + userId, then stores as chunks.
 // Anonymous-only sessions (no userId) are rejected — discarded client-side
 // before reaching here, but the server enforces it too (D-34).
+// Replay disabled (D-37): gate check — reject if replay_settings.enabled=false.
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
   const writeKey = req.headers.get('x-write-key')
   if (!writeKey || writeKey !== process.env.CTHRU_WRITE_KEY) {
     return NextResponse.json({ error: 'unauthorized' }, { status: 401 })
+  }
+
+  // Consent gate (D-37): replay is off by default; reject when disabled.
+  const settings = await getReplaySettings()
+  if (!settings.enabled) {
+    return NextResponse.json({ error: 'replay_disabled' }, { status: 403 })
   }
 
   const anonymousId = req.headers.get('x-anonymous-id') ?? ''

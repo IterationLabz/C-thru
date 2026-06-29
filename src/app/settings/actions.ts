@@ -8,6 +8,10 @@ import { createRule, deleteRule, type SignalType } from '@/lib/readinessEngine'
 import { saveOutreachSettings, saveVoiceSample, deleteVoiceSample } from '@/lib/outreachDraft'
 import { createTriggerRule, deleteTriggerRule } from '@/lib/triggerEngine'
 import { addSuppression, removeSuppression } from '@/lib/suppressionList'
+import {
+  enableReplay, disableReplay, updateRetentionDays, updateSampleRate,
+  CURRENT_CLAUSE_VERSION,
+} from '@/lib/replay/consentGate'
 
 const VALID_SIGNALS: SignalType[] = [
   'active_users', 'total_events', 'days_since_active', 'key_event_fired', 'days_in_product',
@@ -126,5 +130,40 @@ export async function removeSuppressionAction(formData: FormData): Promise<void>
   const id = Number(formData.get('id'))
   if (!id) return
   await removeSuppression(id)
+  revalidatePath('/settings')
+}
+
+// Session Replay consent actions (D-37)
+
+export async function enableReplayAction(formData: FormData): Promise<{ error?: string }> {
+  const acknowledged = formData.get('acknowledged')
+  if (acknowledged !== 'true') {
+    return { error: 'You must acknowledge the disclosure clause before enabling replay.' }
+  }
+  try {
+    await enableReplay(CURRENT_CLAUSE_VERSION)
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : 'Failed to enable replay.' }
+  }
+  revalidatePath('/settings')
+  return {}
+}
+
+export async function disableReplayAction(): Promise<void> {
+  await disableReplay()
+  revalidatePath('/settings')
+}
+
+export async function updateReplayRetentionAction(formData: FormData): Promise<void> {
+  const days = Number(formData.get('retention_days'))
+  if (!days || isNaN(days) || days < 1) return
+  await updateRetentionDays(days)
+  revalidatePath('/settings')
+}
+
+export async function updateReplaySampleRateAction(formData: FormData): Promise<void> {
+  const rate = parseFloat(formData.get('sample_rate') as string)
+  if (isNaN(rate) || rate < 0 || rate > 1) return
+  await updateSampleRate(rate)
   revalidatePath('/settings')
 }

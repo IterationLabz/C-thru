@@ -5,6 +5,7 @@ import { listRules } from '@/lib/readinessEngine'
 import { getOutreachSettings } from '@/lib/outreachDraft'
 import { listTriggerRules } from '@/lib/triggerEngine'
 import { listSuppressions } from '@/lib/suppressionList'
+import { getReplaySettings, CURRENT_CLAUSE_VERSION } from '@/lib/replay/consentGate'
 import {
   addKeyEventAction, deleteKeyEventAction,
   addBlockedDomainAction, removeBlockedDomainAction,
@@ -12,8 +13,11 @@ import {
   saveOutreachSettingsAction, saveVoiceSampleAction, deleteVoiceSampleAction,
   addTriggerRuleAction, deleteTriggerRuleAction,
   addSuppressionAction, removeSuppressionAction,
+  enableReplayAction, disableReplayAction,
+  updateReplayRetentionAction, updateReplaySampleRateAction,
 } from './actions'
 import { VerifyKeyButton } from './VerifyKeyButton'
+import { ReplayEnableForm } from './ReplayEnableForm'
 
 export const dynamic = 'force-dynamic'
 
@@ -24,13 +28,14 @@ const PROVIDERS = [
 ]
 
 export default async function SettingsPage() {
-  const [keyEvents, blockedDomains, rules, outreachSettings, triggerRules, suppressions] = await Promise.all([
+  const [keyEvents, blockedDomains, rules, outreachSettings, triggerRules, suppressions, replaySettings] = await Promise.all([
     listKeyEvents(),
     listBlockedDomains(),
     listRules(),
     getOutreachSettings(),
     listTriggerRules(),
     listSuppressions(),
+    getReplaySettings(),
   ])
   const llmKeyHint = getLlmKeyHint()
   const { provider: currentProvider, model: currentModel } = getLlmProviderConfig()
@@ -434,6 +439,81 @@ export default async function SettingsPage() {
               Add
             </button>
           </form>
+        </section>
+
+        {/* Session Replay (D-37) — off by default */}
+        <section className="mb-12">
+          <h2 className="text-base font-semibold text-gray-700 mb-1">Session Replay</h2>
+          <p className="text-sm text-gray-400 mb-4">
+            Record user sessions to understand WHY users hesitate or drop off.
+            Off by default — enabling requires acknowledging your disclosure obligations.{' '}
+            {replaySettings.enabled && (
+              <a href="/replay" className="text-gray-600 hover:text-gray-900 underline">View recordings →</a>
+            )}
+          </p>
+
+          {replaySettings.enabled ? (
+            <div className="space-y-6">
+              <div className="flex items-center gap-3 px-4 py-3 bg-green-50 border border-green-200 rounded-lg">
+                <span className="w-2 h-2 rounded-full bg-green-500 shrink-0" />
+                <span className="text-sm text-green-800">
+                  Session Replay is <strong>enabled</strong>.
+                  {replaySettings.acknowledgedAt && (
+                    <> Acknowledged {replaySettings.acknowledgedAt.toLocaleDateString()} (clause v{replaySettings.acknowledgedClauseVersion}).</>
+                  )}
+                </span>
+              </div>
+
+              <form action={updateReplayRetentionAction} className="flex gap-3 items-end">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Retention (days)</label>
+                  <input
+                    name="retention_days"
+                    type="number"
+                    min="1"
+                    defaultValue={replaySettings.retentionDays}
+                    className="border border-gray-300 rounded px-3 py-2 text-sm w-28 focus:outline-none focus:ring-2 focus:ring-gray-400"
+                  />
+                </div>
+                <button type="submit"
+                  className="bg-gray-900 text-white text-sm px-4 py-2 rounded hover:bg-gray-700 transition-colors">
+                  Save
+                </button>
+              </form>
+
+              <form action={updateReplaySampleRateAction} className="flex gap-3 items-end">
+                <div>
+                  <label className="block text-xs text-gray-500 mb-1">Sample rate (0.0 – 1.0)</label>
+                  <input
+                    name="sample_rate"
+                    type="number"
+                    min="0"
+                    max="1"
+                    step="0.01"
+                    defaultValue={replaySettings.sampleRate}
+                    className="border border-gray-300 rounded px-3 py-2 text-sm w-28 focus:outline-none focus:ring-2 focus:ring-gray-400"
+                  />
+                </div>
+                <button type="submit"
+                  className="bg-gray-900 text-white text-sm px-4 py-2 rounded hover:bg-gray-700 transition-colors">
+                  Save
+                </button>
+              </form>
+
+              <form action={disableReplayAction}>
+                <button type="submit"
+                  className="text-sm text-red-500 hover:text-red-700 transition-colors">
+                  Disable Session Replay
+                </button>
+              </form>
+            </div>
+          ) : (
+            <ReplayEnableForm
+              enableAction={enableReplayAction}
+              clauseVersion={CURRENT_CLAUSE_VERSION}
+              retentionDays={replaySettings.retentionDays}
+            />
+          )}
         </section>
 
         {/* Blocked domains */}
