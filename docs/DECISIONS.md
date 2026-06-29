@@ -543,3 +543,119 @@ The voice sample is style instruction only. A casual voice in the sample does no
 3. **No embeddings.** Opaque, not human-readable, cannot be cleanly deleted. Fails the "founder can see exactly what's stored and delete it completely" test.
 
 These are not deferred to a later version with better implementation — they are wrong in principle for any version where self-hosted, founder-as-data-controller privacy is the product promise.
+
+---
+
+## v0.5 — Session Replay
+
+> **v0.5 is architecturally different from v0.1–v0.4.** The Spine principle ("deterministic facts, LLM only phrases") does **NOT** apply here. Session Replay has no LLM and no facts to validate — it is a capture + masking + storage + playback problem. The central safety risk is privacy (masking must fail safe); the central engineering risk is storage volume.
+
+---
+
+## D-31 — Retention background job: C-thru's first scheduled background job
+
+**Decision:** v0.5 introduces C-thru's first scheduled background job — a dedicated lightweight `cleanup` service in `docker-compose` that runs the retention DELETE nightly.
+
+**This is consistent with D-26, not a reversal.** D-26 banned auto-send from a scheduler for safety: a human action (outreach) must not fire automatically. Retention is different on both counts: it is maintenance with no human-action substitute (a privacy guarantee cannot depend on the founder remembering to visit a page), and it causes no harm by running automatically. The ban in D-26 was targeted — "no scheduler calling sendSlack/recordCopy/evaluateTriggers" — not a blanket prohibition on all background work.
+
+**The cleanup service does retention only.** It must not import or call `sendSlack`, `recordCopy`, `evaluateTriggers`, or `createTriggeredDraft`. The D-26 grep test is updated accordingly: it now asserts both (a) that send/trigger identifiers appear only in the allowed set (unchanged), AND (b) that the cleanup service exists and touches only retention deletion — never the send/trigger surface. The grep test expands to verify the boundary in both directions.
+
+**DELETE semantics:**
+- Deletion is by session (all chunks belonging to an expired session deleted together, never orphaned chunks left behind).
+- Idempotent: running twice produces the same result.
+- Logged: each nightly run records count of sessions deleted and bytes freed, so retention enforcement is verifiable and auditable rather than invisible.
+- `expires_at` is set at write time when a session is first stored. Shortening the retention window applies retroactively at the next nightly run (any session with `expires_at` in the past is deleted, regardless of when `expires_at` was set).
+
+**Deployment:** the cleanup service is added to the existing `docker-compose.yml` — still a single `docker compose up`.
+
+---
+
+## D-32 — Masking: block-by-default, fail safe
+
+**Decision:** rrweb captures the full DOM. All `<input>`, `<textarea>`, and `<select>` values are masked at capture time in the browser snippet, always. Founders allow-list specific safe fields via `data-cthru-record` attribute. Misconfiguration fails safe (masked, not leaked).
+
+**Permanent-block list** (type=password, credit-card fields, `autocomplete=cc-*`) is never recordable and cannot be overridden by the allow-list. Permanent-block always wins over `data-cthru-record`. This class receives element-level blanking (the element's presence may appear in the DOM snapshot, but its contents and rendered value are replaced). Ordinary default-blocked fields receive value masking (element structure visible, value replaced with a placeholder).
+
+**Masking happens in the snippet before transmission.** The real value never leaves the browser. A structural test asserts this: the test installs the snippet, fires events containing sensitive field values, and inspects the outbound payload to assert the real value does not appear anywhere in it. This is the v0.5 structural safety proof — the replay equivalent of the never-auto-send grep test in D-26.
+
+**Failure mode is always privacy-safe.** A missing or misspelled `data-cthru-record` attribute means the field stays masked. There is no configuration path that produces a leak; only explicit correct allow-listing produces recording.
+
+---
+
+## D-33 — Storage: single-Postgres, chunked BYTEA, client-side compression
+
+**Decision:** rrweb event streams are stored gzip-compressed in a dedicated `session_recordings` table as BYTEA chunks. Chunks use **sequence numbers** (not timestamps) for deterministic ordering — sequence numbers are monotonic integers assigned at write, immune to clock skew.
+
+**Compression is client-side, before transmission.** The wire payload is masked + compressed. Server stores the compressed bytes directly. This minimises both bandwidth and storage without requiring server-side CPU per recording.
+
+**No separate object store.** A separate blob store (S3, MinIO) contradicts the one-command deploy goal. For the target scale (hundreds of active users, 30-day retention window), single-Postgres stays under ~10 GB — manageable on modest hardware. The storage ceiling is documented honestly in the UI/docs: beyond a stated sessions-per-day threshold, single-Postgres is outgrown and a separate object store is the upgrade path.
+
+**Storage ceiling is only honest because D-31 retention actually runs.** The ceiling estimate assumes the nightly cleanup deletes expired sessions. If the cleanup service is disabled or broken, storage grows without bound. The two decisions are load-bearing on each other.
+
+**Chunk reassembly is round-trip tested:** the test suite verifies chunk → store → reassemble → stream is byte-identical to the original, and that sequence gaps produce a detectable "incomplete" result rather than silently missing events.
+
+---
+
+## D-34 — Capture scope: identified sessions only, buffer-then-commit-on-identify
+
+**Decision:** By default, C-thru records only sessions where `cthru.identify()` fires. Anonymous-only sessions are never transmitted or stored.
+
+**The model is buffer-from-session-start, commit-on-identify, discard-if-never-identified** — not start-recording-at-identify. The pre-identify behavior (what the user did before logging in) is the most valuable part of the session, because it shows the path that led to identification. Starting the recording only at `identify()` would miss exactly the portion that explains the conversion or drop-off. This is the same insight as D-23's journey seam: pre-login events belong in the record.
+
+**Buffer constraints:**
+- The buffer is capped (duration and size) with oldest events evicted when the cap is reached. Memory stays bounded regardless of how long before `identify()` fires.
+- Masking (D-32) is applied before buffering — raw sensitive values never exist in the buffer even transiently.
+- When `identify()` fires, the buffer is flushed as a unit. If `identify()` never fires, the buffer is discarded client-side.
+
+**Sampling** is decided per-session at flush time (atomically, based on the configured sample rate). No partial sessions — a session is either fully recorded or not recorded at all.
+
+**Readiness-linked capture** (only record sessions for accounts that meet readiness thresholds) is the natural v0.5.x follow-on — not v0.5 scope.
+
+---
+
+## D-35 — Identity linkage: reuse the alias model, derive company_domain at query time
+
+**Decision:** `session_recordings` stamps `anonymous_id` and `user_id` at flush (immutable facts known at identify-time). The existing `aliases` table and identity model are reused unchanged — no parallel identity system, no new linkage table.
+
+**`company_domain` is NOT stored on session_recordings.** It is derived at query time via `user_id → users.email → blocklist join`, exactly as D-18 established for `company_activity_v`. Stamping `company_domain` at flush would freeze the value at a point in time and cause stale reads if the blocklist changes — a session recorded before a domain was blocked would appear in the account view after blocking. Query-time derivation inherits the D-18 blocklist-consistency guarantee automatically.
+
+**Schema:** `session_id, anonymous_id, user_id, started_at, ended_at, expires_at, chunk_count`. No `company_domain` column.
+
+**Surface in existing views:**
+- **Journey view:** inline "recording available" marker at session start (before the identification seam), covering the pre-identify portion. Placement is at `session.started_at`, not at `identify()` — correct positioning for the buffer-then-commit model.
+- **Account view:** recording count + link per domain, derived at query time from `user_id` → domain join.
+
+---
+
+## D-36 — Playback: context-first entry, shared completeness definition
+
+**Decision:** rrweb `@rrweb/player` is fed a reassembled stream. v0.5 provides no standalone `/replay` index — entry is always context-first (from the journey marker or account view recording count). Player at `/replay/[sessionId]`.
+
+**Player UI:** play/pause, scrubber, 2× speed, metadata panel (user, domain, duration, started_at), masking notice as a policy statement ("C-thru masks input values by default") — an always-true claim about the system, not a per-session assertion that could vary. Three failure modes handled explicitly:
+
+1. **Incomplete recording:** banner at top of player ("recording is incomplete"), playback continues with available data, no crash.
+2. **Large session:** progressive playback — stream snapshot chunk + first N seconds, then continue streaming remaining chunks. Up-front integrity check completes before playback starts.
+3. **Expired / deleted:** clear message "deleted per retention policy" — not a 404.
+
+**"Complete" has one shared definition** used by both the D-33 chunk reassembly test and the player's incomplete banner: snapshot chunk present AND chunks 1..N in sequence with no gap in sequence numbers. The player does not define "incomplete" differently from the storage layer.
+
+**Pre-playback integrity check runs before progressive playback starts.** Compare `session.chunk_count` to chunks actually present in the DB + confirm snapshot chunk exists. Incompleteness is known up front, not discovered mid-play. This check is cheap (one COUNT query) and eliminates the mid-play surprise failure mode.
+
+---
+
+## D-37 — Consent and disclosure: off by default, data-controller boundary
+
+**Decision:** Session Replay is OFF by default at the feature level. The snippet loads and events capture, but rrweb does not initialize until the founder explicitly enables Session Replay in Settings. Off is the starting state; the founder must make a deliberate choice to turn it on.
+
+**First enable requires an explicit acknowledgment**, not just a toggle. When the founder enables Session Replay for the first time, they see a short template privacy-policy clause they can adapt (generic, adaptable without a lawyer, explicitly labeled "not legal advice"), and must check: "I have disclosed session recording to my users." This acknowledgment is **persisted as an audit record** — timestamp + version of the clause shown — same audit-trail logic as the D-29 suppression soft-delete. If a founder ever needs to demonstrate they took disclosure seriously, the record exists. C-thru asked; the founder confirmed; the date is logged.
+
+**Retention window is colocated with the enable toggle** in Settings. The founder sees "recordings auto-delete after [N] days" on the same screen where they enable the feature, because retention is part of their compliance posture and should not require navigation to find.
+
+**C-thru does NOT block recording for EU IP addresses.** IP-based blocking would:
+1. Create false compliance assurance — GDPR applies to data subjects, not IP geographies; VPNs and corporate proxies make IP-based jurisdiction unreliable.
+2. Have C-thru make a legal determination (this user is EU, GDPR applies, block them) that belongs to the data controller, not the tool.
+3. Silently gap the founder's recordings without explanation, breaking a feature they deliberately enabled.
+
+False assurance is worse than none. The data-controller framing is the correct boundary: C-thru is the tool; self-hosted + masked + auto-deleting is the strongest structural privacy posture C-thru can offer. Disclosure and lawful basis are the founder's responsibility, made easy — not C-thru's responsibility to enforce by proxy.
+
+**Responsibility boundary (same as D-29):** C-thru is the tool; the founder is the data controller. C-thru's obligation is making the compliant path the path of least resistance (off-by-default, explicit acknowledgment, template clause, retention window visible, persistent audit record). The founder's legal obligation covers their users' consent and lawful basis under applicable privacy law.
