@@ -1,5 +1,6 @@
 import { notFound } from 'next/navigation'
 import { scoreCompany } from '@/lib/readinessEngine'
+import { GenerateDraftButton } from './GenerateDraftButton'
 
 export const dynamic = 'force-dynamic'
 
@@ -72,6 +73,16 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
             ))}
           </ul>
         </section>
+
+        {/* Draft outreach CTA */}
+        <div className="mt-8 bg-white border border-gray-200 rounded-lg p-5">
+          <h2 className="text-sm font-semibold text-gray-700 mb-1">Ready to reach out?</h2>
+          <p className="text-xs text-gray-400 mb-4">
+            C-thru will draft a message grounded in this account&apos;s readiness data.
+            You review, edit, and send — never automatic.
+          </p>
+          <GenerateDraftButton domain={domain} />
+        </div>
 
         <p className="text-xs text-gray-400 mt-6">
           Scores computed live from your data.{' '}

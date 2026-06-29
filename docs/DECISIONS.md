@@ -390,3 +390,156 @@ The CTE resolves the user's anonymous_id set cleanly once, avoiding the LEFT JOI
 **This is a prerequisite for D-23.** Without `first_identified_at`, the journey view cannot correctly place the identification seam — all pre-login events would be misclassified as post-identification because the alias row exists at query time regardless of when identify() was originally called.
 
 **Test requirement:** a test that calls processEvent with identify() twice for the same anonymous_id (simulating re-identification on a new device) and asserts that `first_identified_at` does not change on the second call.
+
+---
+
+## D-25 — Draft fact contract: deterministic grounding + output discipline
+
+**Decision:** The outreach draft is LLM-generated but grounded in a deterministic fact block built from `scoreCompany()` + `topUsers` only — no raw DB access, no freeform description. The fact block is a structured text payload constructed by the same pipeline already in production:
+
+```
+Company: razorpay.com
+Rules met: 4/5
+  ✓ Active users ≥ 3 (last 30d) — 7 users
+  ✓ Total events ≥ 20 (last 7d) — 143 events
+  ✓ Active in last 14 days — last active today
+  ✓ Key event fired — payment_intent
+  ✗ In product ≥ 7 days — 3 days
+
+Top users (last 7 days):
+  priya@razorpay.com — 63 events
+  rahul@razorpay.com — 48 events
+```
+
+The LLM receives this block, the grounding constraint ("use ONLY these facts, do not infer anything not listed"), and the voice instruction (see D-30). The generation brief is deliberately narrow: "write a brief, friendly note stating that this team is actively using the product, and offer help" — not "write a compelling outreach email." Narrower brief = smaller hallucination surface.
+
+**Why the defense is OUTPUT discipline, not prompt discipline.** The brief (D-20) uses a pure template because an LLM would smuggle in "suggests they're evaluating" through word choice — so we removed the LLM from that path entirely. The draft cannot be a pure template (a human must want to send it; it must read naturally). This is the one place where the LLM must generate free prose, which means hallucination cannot be prevented by removing the LLM — it can only be made visible and catchable before send. Three output discipline layers:
+
+1. **Post-generation ungrounded-claims flag.** After generation, programmatically scan for phrases implying observed behaviour not in the fact block: `I saw you`, `I noticed`, `you've been exploring`, specific feature or page references absent from the rules. Flag these inline with ⚠ ("this line claims behaviour not in your data — verify before sending"). The flag won't catch everything; it surfaces the highest-risk hallucination class.
+2. **Mandatory visible human review.** The draft is presented prominently and in full, editable, with send as a separate deliberate action. There is no "generate and send" shortcut — the structural separation is what makes hallucination catchable.
+3. **Never-auto-send as the enabling guardrail.** The draft's reliance on LLM prose (unlike the brief's deterministic template) is only acceptable because the founder always reads and approves before anything goes out. The two decisions are coupled: if auto-send were ever allowed, the output-discipline layers would be insufficient. The primary backstop is the human.
+
+**Grounding vs. the brief.** The morning brief (D-20) is deterministic and contains no LLM — "structure makes hallucination impossible." The draft's posture is different: "structure makes hallucination visible and catchable." Both are forms of the same Spine principle; the mechanism differs because the output requirement differs.
+
+---
+
+## D-26 — Channels + structural no-auto-send
+
+**Decision:** v0.4 channels are **Slack webhook** and **copy-to-clipboard** only.
+
+- **Slack webhook:** founder pastes one URL in Settings; C-thru POSTs a Slack-formatted message when the founder explicitly clicks the send button. No credentials beyond the URL. Serves "notify myself/team when an account tips over the threshold."
+- **Copy-to-clipboard:** C-thru generates the draft text; founder copies, opens their own Gmail or email client, pastes, sends from their own address with their own deliverability identity.
+
+**SMTP deferred.** Storing a founder's SMTP password is a credential risk (write access to send email as the founder). The server's IP will not be on the founder's SPF record, so email sent via C-thru would fail SPF/DKIM alignment and land in spam or be rejected. CAN-SPAM (physical address, unsubscribe mechanism) adds further surface. These belong in a dedicated later version with careful deliverability design, not bundled into v0.4.
+
+**Structural never-auto-send — enforced by code, grep-verifiable:**
+
+1. **Single-account send route only.** The API route / Server Action that fires a Slack POST or records a clipboard action takes a single `draftId` parameter. No batch endpoint exists.
+2. **Idempotent on `sent_at`.** Before any send action the route checks `WHERE id = $draftId AND sent_at IS NULL`. If `sent_at` is already set, returns 409 and does nothing. A double-click sends once.
+3. **UI-only entry point.** The send route is reachable only from an explicit form submit in the logged-in session (Server Action or POST-only route). No cron job, background queue, event listener, or polling loop calls it.
+4. **Grep test.** `grep -r "sendDraft\|sendSlack\|evaluateTriggers" src/` must return only server actions and the page-load evaluation path — nothing in a scheduler or background task file. This is the mechanical verification that the no-background-caller guarantee holds.
+
+---
+
+## D-27 — Trigger lifecycle: draft-only, page-load evaluation, de-dup with re-arm
+
+**Decision:** A trigger rule creates a **draft record only** — no send, no Slack message, no automatic outreach of any kind. The trigger is what makes v0.4 an engine rather than a button (the founder should not have to remember to check who's ready), but the safety comes from "trigger → draft (not send)" plus de-duplication.
+
+**Trigger evaluation timing:** Synchronous during a founder-initiated page load (`/accounts` or `/outreach`). No background job, no cron, no queue. This preserves the no-background-caller guarantee from D-26 — the grep test must still pass after triggers are added. If trigger evaluation ever moves to a real scheduler in a future version, that is a deliberate documented decision, not drift.
+
+**Draft states:** `pending` → `sent` | `dismissed`. No other transitions.
+
+**De-dup key:** `(trigger_rule_id, domain)`.
+
+**Full lifecycle:**
+1. Account score crosses threshold → check for existing `pending` draft on `(trigger_rule_id, domain)`. Found → no-op. Not found → create draft (`status = pending`), record `triggered_at`.
+2. Founder sends or dismisses → flip to `sent` / `dismissed`. Set `re_arm_eligible = false` on the `trigger_domain_state` row for this `(trigger_rule_id, domain)` pair.
+3. On subsequent page-load evaluation: if account score **drops below threshold** → set `re_arm_eligible = true`.
+4. On next evaluation: score above threshold **AND** `re_arm_eligible = true` → create new draft row, reset `re_arm_eligible = false`. Cycle restarts.
+
+**Why this re-arm design.** Without it, two failure modes exist: (a) a continuously-hot account that stays above threshold after a send/dismiss never re-drafts even months later when a new reason to reach out emerges — too restrictive; (b) an oscillating score re-drafts constantly — spam. The dip-and-recross condition is the precise discriminator: a genuine new event (account went cold and came back) re-arms the trigger; an account that simply stays warm does not.
+
+**`trigger_domain_state` table:** one row per `(trigger_rule_id, domain)` pair, holding `re_arm_eligible` (boolean). Separate from the `drafts` table, which holds one row per draft instance.
+
+---
+
+## D-28 — Outreach log: outbound audit trail
+
+**Decision:** One row in `outreach_log` per send/copy action, recording:
+
+| Column | Value |
+|--------|-------|
+| `draft_id` | FK to the draft record |
+| `domain` | target company domain |
+| `channel` | `slack` \| `clipboard_copied` |
+| `recipient` | pre-filled from `topUsers[0].email`, founder-editable; log exactly what they left — if cleared, log null |
+| `draft_text_snapshot` | frozen copy of the draft text **at action time**, not the generated text |
+| `created_by` | `trigger` \| `manual` |
+| `trigger_rule_id` | nullable; set when `created_by = 'trigger'` |
+| `actioned_at` | timestamp of the copy or Slack send |
+
+**`draft_text_snapshot` records what actually went out.** The founder edits before sending; logging the generated text would record intent, not action. The snapshot must capture the founder's edited version at the moment they click send/copy. This is the same integrity principle that applies throughout: the log must reflect reality.
+
+**Clipboard labeled "Copied", not "Sent".** C-thru cannot verify clipboard delivery — the founder may not paste, may edit further, may not send. Claiming "Sent" would be a false record. In the log UI, clipboard entries and Slack entries are visually distinct (different icon, different label) so the founder can instantly distinguish "actually delivered to Slack" from "copied and may or may not have been sent."
+
+**`created_by` + `trigger_rule_id`:** the founder will want to know whether C-thru surfaced an account or they went looking. It is also the signal for which trigger rules lead to actual sent outreach — which readiness rules predict real action. Cheap to record, useful for the founder's own learning.
+
+**Scope boundary:** outbound audit only. No reply tracking, no thread history. Reply tracking requires either inbox access (the privacy surface refused throughout this project) or an SMTP integration that can thread (deferred in D-26). The log answers "what did I send/copy, to whom, when, what text" — not "did they reply."
+
+---
+
+## D-29 — Anti-spam guardrails: cooldown + suppression
+
+**Decision:** Two mandatory structural guardrails. Neither replaces the human-in-the-loop from D-25/D-26; both reinforce it.
+
+**A — Per-domain send cooldown.**
+Default: 21 days, configurable in Settings.
+
+Before any draft creation, check `outreach_log` for the domain: was anything copied or sent within the cooldown window?
+
+- **Triggered drafts:** silently suppressed within cooldown. Automated paths fail safe and quiet — no draft created, no notification.
+- **Manual drafts:** warn-but-allow. Show "You last contacted razorpay.com 8 days ago" but do not hard-block — the founder may have a legitimate reason.
+
+The cooldown is the anti-annoyance instrument. It is overridable by design (for manual) because over-contact is a judgment call the founder may legitimately override. No daily cap across all domains — a cap would punish a founder with 20 genuinely ready accounts simultaneously. The per-domain cooldown is the precise instrument.
+
+**B — Suppression list.**
+A table of suppressed domains and email addresses. Checked at **two points**:
+
+1. **Pre-creation:** before any draft is created (triggered or manual), check the suppression list. If the domain or recipient matches, no draft is created.
+2. **Send/copy-time:** existing `pending` drafts are checked again at the moment of send/copy action. This catches entries suppressed after a draft was already created.
+
+Suppression is a **hard block with no override**. Unlike the cooldown (warn-but-allow for manual), suppression has no severity gradient: a prospect who explicitly opted out has no legitimate override case. The UI presents no "proceed anyway" path.
+
+**Suppression deletion — soft-delete with confirmation, compliance audit trail retained.** Suppression entries are not hard-deleted. Removal requires an explicit confirmation: *"This person asked not to be contacted. Removing them allows C-thru to draft outreach to them again. Are you sure?"* The row is soft-deleted (`removed_at` timestamp), preserving the opt-out history as a compliance artifact. This is distinct from the voice sample (D-30), which is hard-deleted — the suppression record has ongoing legal significance; the voice sample does not.
+
+**Contextual compliance reminder.** A reminder surfaces when usage looks bulk-like (heuristic: ≥ 3 sends/copies to different domains within a 7-day window). Outside that threshold it does not appear — a reminder that is always visible becomes wallpaper. When it appears: "Personal 1:1 outreach only. For bulk email, add an unsubscribe mechanism and physical address." C-thru cannot technically enforce CAN-SPAM post-clipboard; the reminder is the honest boundary of what C-thru can do.
+
+**Responsibility boundary:** C-thru is the tool; the founder is the data controller and the sender. C-thru's structural obligation is to make the compliant path the path of least resistance (cooldown, suppression, single-account send, honest labeling). The founder's legal obligation covers what they do with the clipboard.
+
+---
+
+## D-30 — Founder voice: plain-text sample, minimal and explicit
+
+**Decision:** The founder provides a voice sample: 2–5 sentences of their own writing (an email they've sent, a Slack message they liked the tone of), pasted into a plain textarea in Settings. Stored as a plain text string. Optional, with fallback to generic professional tone.
+
+**System prompt layering — voice alongside grounding, not instead of it:**
+
+```
+[Fact block — scoreCompany() + topUsers, deterministic (D-25)]
+[Grounding constraint — "use ONLY these facts, do not infer anything not listed"]
+[Voice instruction — "match the tone and phrasing of this sample: [sample]"]
+[Output gate — post-generation ungrounded-claims scan runs regardless of voice mode (D-25)]
+```
+
+The voice sample is style instruction only. A casual voice in the sample does not relax the fact constraint — the grounding and the ungrounded-claims gate apply regardless of tone. "He writes informally" does not unlock "I noticed you've been exploring our billing page."
+
+**UI shows which mode.** Draft displays "Drafted in your voice" or "Generic tone — add a voice sample in Settings to personalise." The founder knows what they are about to send.
+
+**Hard-delete on request.** Deleting the voice sample removes the row entirely — no `removed_at`, no archive. The voice sample is personal data (the founder's own writing) with no retention justification after deletion. This is distinct from the suppression list (D-29), which is a compliance artifact with legal significance worth preserving. The founder must be able to see exactly what is stored and delete it completely — this is the privacy test the sample passes and that any other voice-capture approach must also pass.
+
+**Three locked rejections — privacy principle, not v0.4 shortcuts:**
+1. **No inbox analysis.** Reading sent emails to derive voice requires inbox access — the privacy surface refused at every turn in this project.
+2. **No learning from draft edits.** An implicit style model derived from the founder's edits over time is uninspectable (they cannot read it), undeletable (it has no clean boundary), and persistent (it grows without consent). This is the "creepy" the plain-text sample avoids.
+3. **No embeddings.** Opaque, not human-readable, cannot be cleanly deleted. Fails the "founder can see exactly what's stored and delete it completely" test.
+
+These are not deferred to a later version with better implementation — they are wrong in principle for any version where self-hosted, founder-as-data-controller privacy is the product promise.

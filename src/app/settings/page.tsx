@@ -2,7 +2,17 @@ import { listKeyEvents } from '@/lib/keyEvents'
 import { listBlockedDomains } from '@/lib/blockedDomains'
 import { getLlmKeyHint, getLlmProviderConfig } from '@/lib/llmSettings'
 import { listRules } from '@/lib/readinessEngine'
-import { addKeyEventAction, deleteKeyEventAction, addBlockedDomainAction, removeBlockedDomainAction, saveLlmConfigAction, addRuleAction, deleteRuleAction } from './actions'
+import { getOutreachSettings } from '@/lib/outreachDraft'
+import { listTriggerRules } from '@/lib/triggerEngine'
+import { listSuppressions } from '@/lib/suppressionList'
+import {
+  addKeyEventAction, deleteKeyEventAction,
+  addBlockedDomainAction, removeBlockedDomainAction,
+  saveLlmConfigAction, addRuleAction, deleteRuleAction,
+  saveOutreachSettingsAction, saveVoiceSampleAction, deleteVoiceSampleAction,
+  addTriggerRuleAction, deleteTriggerRuleAction,
+  addSuppressionAction, removeSuppressionAction,
+} from './actions'
 import { VerifyKeyButton } from './VerifyKeyButton'
 
 export const dynamic = 'force-dynamic'
@@ -14,10 +24,13 @@ const PROVIDERS = [
 ]
 
 export default async function SettingsPage() {
-  const [keyEvents, blockedDomains, rules] = await Promise.all([
+  const [keyEvents, blockedDomains, rules, outreachSettings, triggerRules, suppressions] = await Promise.all([
     listKeyEvents(),
     listBlockedDomains(),
     listRules(),
+    getOutreachSettings(),
+    listTriggerRules(),
+    listSuppressions(),
   ])
   const llmKeyHint = getLlmKeyHint()
   const { provider: currentProvider, model: currentModel } = getLlmProviderConfig()
@@ -237,6 +250,190 @@ export default async function SettingsPage() {
               ))}
             </ul>
           )}
+        </section>
+
+        {/* Outreach — Slack webhook + cooldown */}
+        <section className="mb-12">
+          <h2 className="text-base font-semibold text-gray-700 mb-1">Outreach</h2>
+          <p className="text-sm text-gray-400 mb-4">
+            Configure your Slack webhook and per-domain send cooldown.{' '}
+            <a href="/outreach" className="text-gray-600 hover:text-gray-900 underline">View outreach queue →</a>
+          </p>
+          <form action={saveOutreachSettingsAction} className="space-y-3">
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Slack incoming webhook URL</label>
+              <input
+                type="url"
+                name="slack_webhook_url"
+                defaultValue={outreachSettings.slack_webhook_url ?? ''}
+                placeholder="https://hooks.slack.com/services/..."
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-400"
+              />
+              <p className="text-xs text-gray-400 mt-1">Stored server-side — never exposed in the browser.</p>
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Send cooldown (days)</label>
+              <input
+                type="number"
+                name="cooldown_days"
+                defaultValue={outreachSettings.cooldown_days}
+                min="1"
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400"
+              />
+              <p className="text-xs text-gray-400 mt-1">
+                Triggered drafts are suppressed if this domain was contacted within the window. Manual drafts show a warning but are not blocked.
+              </p>
+            </div>
+            <button
+              type="submit"
+              className="bg-gray-900 text-white text-sm px-4 py-2 rounded hover:bg-gray-700 transition-colors"
+            >
+              Save outreach settings
+            </button>
+          </form>
+        </section>
+
+        {/* Founder voice sample */}
+        <section className="mb-12">
+          <h2 className="text-base font-semibold text-gray-700 mb-1">Founder voice</h2>
+          <p className="text-sm text-gray-400 mb-4">
+            Paste 2–5 sentences of your own writing (an email, a Slack message). C-thru will match the tone.
+            Optional — without a sample, drafts use generic professional tone.
+          </p>
+          {outreachSettings.voice_sample ? (
+            <div className="mb-4">
+              <p className="text-xs text-gray-500 mb-1">Current sample:</p>
+              <pre className="whitespace-pre-wrap text-sm text-gray-700 bg-white border border-gray-200 rounded px-4 py-3 font-sans">
+                {outreachSettings.voice_sample}
+              </pre>
+              <form action={deleteVoiceSampleAction} className="mt-2">
+                <button
+                  type="submit"
+                  className="text-xs text-red-400 hover:text-red-600 transition-colors"
+                >
+                  Delete voice sample (hard-deleted, no archive)
+                </button>
+              </form>
+            </div>
+          ) : (
+            <p className="text-sm text-gray-400 mb-4">No voice sample saved.</p>
+          )}
+          <form action={saveVoiceSampleAction} className="space-y-3">
+            <textarea
+              name="voice_sample"
+              rows={4}
+              placeholder="Hey, I noticed your team has been using the product a lot lately — wanted to reach out and see if there's anything I can do to help you get more out of it."
+              className="w-full border border-gray-300 rounded px-3 py-2 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-gray-400 resize-y"
+            />
+            <button
+              type="submit"
+              className="bg-gray-900 text-white text-sm px-4 py-2 rounded hover:bg-gray-700 transition-colors"
+            >
+              Save voice sample
+            </button>
+          </form>
+        </section>
+
+        {/* Trigger rules */}
+        <section className="mb-12">
+          <h2 className="text-base font-semibold text-gray-700 mb-1">Trigger rules</h2>
+          <p className="text-sm text-gray-400 mb-4">
+            When an account crosses a threshold, C-thru creates a draft automatically — it never sends.
+          </p>
+          {triggerRules.length === 0 ? (
+            <p className="text-sm text-gray-400 mb-6">No trigger rules defined.</p>
+          ) : (
+            <ul className="space-y-1 mb-6">
+              {triggerRules.map(r => (
+                <li key={r.id} className="flex items-center justify-between bg-white border border-gray-200 rounded px-4 py-2">
+                  <div>
+                    <span className="text-sm text-gray-800 font-medium">{r.label}</span>
+                    <span className="ml-3 text-xs text-gray-400 font-mono">
+                      when {r.rules_met_min}/{r.rules_total} rules met
+                    </span>
+                  </div>
+                  <form action={deleteTriggerRuleAction}>
+                    <input type="hidden" name="id" value={r.id} />
+                    <button type="submit" className="text-xs text-red-400 hover:text-red-600 transition-colors">
+                      Remove
+                    </button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          )}
+          <form action={addTriggerRuleAction} className="grid grid-cols-2 gap-3 bg-white border border-gray-200 rounded p-4">
+            <div className="col-span-2">
+              <label className="block text-xs text-gray-500 mb-1">Label</label>
+              <input name="label" required placeholder="Ready to close — 4/5 rules met"
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Minimum rules met</label>
+              <input name="rules_met_min" type="number" required min="1" defaultValue="4"
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs text-gray-500 mb-1">Out of (total rules)</label>
+              <input name="rules_total" type="number" required min="1" defaultValue="5"
+                className="w-full border border-gray-300 rounded px-3 py-2 text-sm" />
+            </div>
+            <div className="col-span-2">
+              <button type="submit"
+                className="bg-gray-900 text-white text-sm px-4 py-2 rounded hover:bg-gray-700 transition-colors">
+                Add trigger rule
+              </button>
+            </div>
+          </form>
+        </section>
+
+        {/* Suppression list */}
+        <section className="mb-12">
+          <h2 className="text-base font-semibold text-gray-700 mb-1">Suppression list</h2>
+          <p className="text-sm text-gray-400 mb-4">
+            Hard blocks — no draft or send action will proceed if the domain or email matches. Cannot be overridden.
+          </p>
+          {suppressions.filter(s => !s.removed_at).length === 0 ? (
+            <p className="text-sm text-gray-400 mb-6">No suppressed domains or emails.</p>
+          ) : (
+            <ul className="space-y-1 mb-6">
+              {suppressions.filter(s => !s.removed_at).map(s => (
+                <li key={s.id} className="flex items-center justify-between bg-white border border-gray-200 rounded px-4 py-2">
+                  <div>
+                    <span className="text-xs text-gray-400 font-mono uppercase mr-2">{s.entry_type}</span>
+                    <span className="text-sm text-gray-800 font-mono">{s.value}</span>
+                  </div>
+                  <form action={removeSuppressionAction}>
+                    <input type="hidden" name="id" value={s.id} />
+                    <button
+                      type="submit"
+                      className="text-xs text-red-400 hover:text-red-600 transition-colors"
+                      onClick={e => {
+                        if (!confirm('This person asked not to be contacted. Removing them allows C-thru to draft outreach to them again. Are you sure?')) {
+                          e.preventDefault()
+                        }
+                      }}
+                    >
+                      Remove
+                    </button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          )}
+          <form action={addSuppressionAction} className="flex gap-3 bg-white border border-gray-200 rounded p-4">
+            <select name="entry_type"
+              className="border border-gray-300 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-gray-400">
+              <option value="email">Email</option>
+              <option value="domain">Domain</option>
+            </select>
+            <input name="value" required placeholder="person@company.com or company.com"
+              className="flex-1 border border-gray-300 rounded px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-gray-400" />
+            <button type="submit"
+              className="bg-gray-900 text-white text-sm px-4 py-2 rounded hover:bg-gray-700 transition-colors">
+              Add
+            </button>
+          </form>
         </section>
 
         {/* Blocked domains */}

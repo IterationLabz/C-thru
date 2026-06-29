@@ -43,6 +43,22 @@ beforeAll(async () => {
 
 afterEach(async () => {
   const { db } = await import('../db')
+  // Act Loop tables first (FK order: dependents before parents)
+  await db.query(`
+    TRUNCATE TABLE
+      outreach_log,
+      trigger_domain_state,
+      outreach_drafts,
+      trigger_rules,
+      suppression_list
+    RESTART IDENTITY
+  `)
+  // Reset outreach_settings singleton to migration defaults
+  await db.query(`
+    UPDATE outreach_settings
+    SET cooldown_days = 21, slack_webhook_url = NULL, voice_sample = NULL, updated_at = NOW()
+    WHERE id = 1
+  `)
   await db.query('TRUNCATE TABLE events, users, companies, aliases, key_events, blocked_domains, pinned_queries, readiness_rules, funnel_steps, funnels RESTART IDENTITY')
   // Re-seed blocked_domains from migration
   const seedSql = readFileSync(join(process.cwd(), 'migrations', '002_blocked_domains.sql'), 'utf-8')
