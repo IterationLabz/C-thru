@@ -41,7 +41,7 @@ export function EmptyState({ title, description, action }: EmptyStateProps) {
 }
 
 /* ── Skeleton loader ── */
-export function SkeletonLine({ width = '100%', height = '1rem' }: { width?: string; height?: string }) {
+export function SkeletonLine({ width = '100%', height = '1rem', style }: { width?: string; height?: string; style?: React.CSSProperties }) {
   return (
     <div
       style={{
@@ -50,14 +50,15 @@ export function SkeletonLine({ width = '100%', height = '1rem' }: { width?: stri
         background: 'var(--color-paper-2)',
         borderRadius: '6px',
         animation: 'shimmer 1.5s ease-in-out infinite',
+        ...style,
       }}
     />
   )
 }
 
-export function SkeletonCard() {
+export function SkeletonCard({ style }: { style?: React.CSSProperties }) {
   return (
-    <Card style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+    <Card style={{ display: 'flex', flexDirection: 'column', gap: '0.75rem', ...style }}>
       <SkeletonLine width="40%" height="0.75rem" />
       <SkeletonLine width="60%" height="2rem" />
       <SkeletonLine width="50%" height="0.75rem" />

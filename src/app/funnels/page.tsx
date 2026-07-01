@@ -1,70 +1,14 @@
 import type { Metadata } from 'next'
-import { listFunnels, evaluateFunnel, type FunnelStepResult } from '@/lib/funnelEngine'
+import { listFunnels, evaluateFunnel } from '@/lib/funnelEngine'
 import { saveFunnelAction, deleteFunnelAction } from './actions'
 import AppShell from '@/components/AppShell'
 import Card from '@/components/Card'
 import { EmptyState } from '@/components/States'
+import FunnelDropoffChart from '@/components/charts/FunnelDropoffChart'
 
 export const metadata: Metadata = { title: 'Funnels' }
 export const dynamic = 'force-dynamic'
 
-function FunnelViz({ steps }: { steps: FunnelStepResult[] }) {
-  const max = steps[0]?.count ?? 1
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '0', marginTop: '1.25rem' }}>
-      {steps.map((step, i) => {
-        const pct = max === 0 ? 0 : Math.round((step.count / max) * 100)
-        const width = `${Math.max(18, pct)}%`
-        const alpha = 0.9 - i * 0.12
-        return (
-          <div key={i} style={{ width: '100%', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-            {i > 0 && step.dropoffPct > 0 && (
-              <p
-                style={{
-                  fontSize: '0.6875rem',
-                  fontFamily: 'var(--font-mono)',
-                  color: 'var(--color-red)',
-                  padding: '0.3125rem 0',
-                }}
-              >
-                ↓ −{step.dropoffPct}% drop-off
-              </p>
-            )}
-            <div
-              style={{
-                width,
-                background: `rgba(184,92,72,${alpha})`,
-                borderRadius: '8px',
-                padding: '0.5rem 1rem',
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                transition: 'width 0.3s',
-              }}
-            >
-              <span
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '0.8125rem',
-                  fontWeight: 600,
-                  color: '#fff',
-                  overflow: 'hidden',
-                  textOverflow: 'ellipsis',
-                  whiteSpace: 'nowrap',
-                }}
-              >
-                {step.eventName}
-              </span>
-              <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem', color: 'rgba(255,255,255,0.85)', flexShrink: 0, marginLeft: '0.5rem' }}>
-                {step.count.toLocaleString()}
-              </span>
-            </div>
-          </div>
-        )
-      })}
-    </div>
-  )
-}
 
 const labelStyle: React.CSSProperties = {
   display: 'block',
@@ -166,7 +110,9 @@ export default async function FunnelsPage() {
               {error ? (
                 <p style={{ fontSize: '0.8125rem', color: 'var(--color-red)', marginTop: '0.75rem' }}>{error}</p>
               ) : result ? (
-                <FunnelViz steps={result.steps} />
+                <div style={{ marginTop: '1.25rem' }}>
+                  <FunnelDropoffChart steps={result.steps} />
+                </div>
               ) : null}
             </Card>
           ))}

@@ -4,6 +4,7 @@ import { scoreAllCompanies } from '@/lib/readinessEngine'
 import AppShell from '@/components/AppShell'
 import Card from '@/components/Card'
 import { ScoreBar } from '@/components/ChartPlaceholder'
+import ReadinessBarChart from '@/components/charts/ReadinessBarChart'
 import { EmptyState } from '@/components/States'
 
 export const metadata: Metadata = { title: 'Accounts' }
@@ -16,6 +17,12 @@ function displayName(domain: string): string {
 
 export default async function AccountsPage() {
   const scores = await scoreAllCompanies()
+  const chartItems = scores.map(s => ({
+    domain: s.domain,
+    label: displayName(s.domain),
+    met: s.rulesMet,
+    total: s.rulesTotal
+  }))
 
   return (
     <AppShell maxWidth="60rem">
@@ -59,6 +66,24 @@ export default async function AccountsPage() {
         />
       ) : (
         <>
+          <section style={{ marginBottom: '2.5rem' }}>
+            <p
+              style={{
+                fontSize: '0.6875rem',
+                fontWeight: 700,
+                letterSpacing: '0.07em',
+                textTransform: 'uppercase',
+                color: 'var(--color-ink-3)',
+                marginBottom: '0.875rem',
+              }}
+            >
+              Readiness by account
+            </p>
+            <Card padding="1.5rem">
+              <ReadinessBarChart items={chartItems} />
+            </Card>
+          </section>
+
           <Card padding="0">
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '0.875rem' }}>
               <thead>
