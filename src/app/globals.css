@@ -1,1 +1,92 @@
 @import "tailwindcss";
+
+@import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,400&family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+@theme {
+  /* ── Palette ── */
+  --color-paper:    #F7F4EE;
+  --color-paper-2:  #F1EDE4;
+  --color-card:     #FFFFFF;
+  --color-ink:      #1C1A17;
+  --color-ink-2:    #6B6455;
+  --color-ink-3:    #9C9484;
+  --color-line:     #E7E1D5;
+  --color-accent:   #B85C48;
+  --color-accent-2: #C89B6A;
+  --color-sage:     #7C8471;
+  --color-slate:    #6B7280;
+  --color-green:    #5B7A46;
+  --color-amber:    #B4791F;
+  --color-red:      #A3462F;
+
+  /* ── Typography ── */
+  --font-display: 'Fraunces', Georgia, serif;
+  --font-sans:    'Inter', system-ui, sans-serif;
+  --font-mono:    'JetBrains Mono', 'Fira Code', monospace;
+
+  /* ── Radius ── */
+  --radius-card: 14px;
+}
+
+/* ── Base reset ── */
+*, *::before, *::after { box-sizing: border-box; }
+
+html {
+  font-family: var(--font-sans);
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  min-height: 100dvh;
+  background-color: var(--color-paper);
+  background-image: radial-gradient(circle, rgba(0, 0, 0, 0.12) 1px, transparent 1px);
+  background-size: 10px 10px;
+}
+
+/* ── Reduced motion ── */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* ── Keyboard focus ── */
+:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+/* ── Hex.tech Inspired Utilities ── */
+.bg-hex-grid {
+  background-image: radial-gradient(var(--color-line) 1px, transparent 1px);
+  background-size: 24px 24px;
+}
+
+.hex-btn-wrapper {
+  position: relative;
+  display: inline-block;
+  padding: 4px;
+}
+.hex-btn-wrapper::before,
+.hex-btn-wrapper::after {
+  content: '';
+  position: absolute;
+  width: 6px;
+  height: 6px;
+  border: 1px dashed var(--color-ink-3);
+  opacity: 0.5;
+}
+.hex-btn-wrapper::before {
+  top: 0; left: 0;
+  border-right: none;
+  border-bottom: none;
+}
+.hex-btn-wrapper::after {
+  bottom: 0; right: 0;
+  border-left: none;
+  border-top: none;
+}
