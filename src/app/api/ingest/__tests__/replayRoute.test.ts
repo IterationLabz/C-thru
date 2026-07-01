@@ -39,7 +39,11 @@ function makeReplayRequest(opts: {
   return new NextRequest('http://localhost:3000/api/ingest/replay', {
     method: 'POST',
     headers,
-    body,
+    // Buffer.from(...) yields a concretely ArrayBuffer-backed Buffer<ArrayBuffer>.
+    // gzipSync()/TextEncoder return Uint8Array<ArrayBufferLike>, which TS 5.7+ no
+    // longer accepts for BodyInit (it requires ArrayBufferView<ArrayBuffer> — the
+    // ArrayBufferLike default also covers SharedArrayBuffer, which isn't valid here).
+    body: Buffer.from(body),
   })
 }
 
