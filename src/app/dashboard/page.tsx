@@ -1,19 +1,44 @@
 import Link from 'next/link'
-import { getActiveUsers, getNewSignups, getTopEvents, getLiveCount, getTopCompanies, formatDomain } from '@/lib/dashboardQueries'
+import {
+  getActiveUsers, getNewSignups, getTopEvents, getLiveCount, getTopCompanies, formatDomain,
+  getEventsOverTime, getActiveUsersOverTime,
+} from '@/lib/dashboardQueries'
+import { scoreAllCompanies } from '@/lib/readinessEngine'
+import { computeTrend, type Trend } from '@/lib/trendComputer'
 import { listPinnedQueries } from '@/lib/pinnedQueries'
 import { validateAndRun, QueryResult } from '@/lib/sqlGuard'
 import { unpinQueryAction } from '@/app/ask/actions'
 import AppShell from '@/components/AppShell'
 import MetricCard from '@/components/MetricCard'
 import Card from '@/components/Card'
-import { BarChartPlaceholder, HorizontalBarPlaceholder, ScoreBar } from '@/components/ChartPlaceholder'
+import { ScoreBar } from '@/components/ChartPlaceholder'
 import { EmptyState } from '@/components/States'
+import EventsOverTimeChart from '@/components/charts/EventsOverTimeChart'
+import TopEventsChart from '@/components/charts/TopEventsChart'
+import ActiveUsersTrendChart from '@/components/charts/ActiveUsersTrendChart'
+import RetentionPlaceholder from '@/components/charts/RetentionPlaceholder'
 
 export const dynamic = 'force-dynamic'
 
-/* ── Freshness dot for last-active column ── */
-function FreshnessDot({ daysAgo }: { daysAgo: number }) {
-  const color = daysAgo <= 1 ? 'var(--color-green)' : daysAgo <= 7 ? 'var(--color-amber)' : 'var(--color-ink-3)'
+/* ── Real trend → short chip label (never invents a number: 'flat'/'new' are honest states) ── */
+function trendChipProps(trend: Trend): { direction: 'up' | 'down' | 'flat'; label: string } {
+  if (trend.direction === 'new') return { direction: 'up', label: 'New' }
+  if (trend.direction === 'flat') return { direction: 'flat', label: 'No change' }
+  return { direction: trend.direction, label: `${Math.abs(trend.pct ?? 0)}%` }
+}
+
+/* ── Days since a real timestamp — null when the company has no recent activity in window ── */
+function daysAgoFrom(iso: string | null): number | null {
+  if (!iso) return null
+  return Math.floor((Date.now() - new Date(iso).getTime()) / 86_400_000)
+}
+
+/* ── Freshness dot for last-active column — null (never active in window) renders neutral ── */
+function FreshnessDot({ daysAgo }: { daysAgo: number | null }) {
+  const color =
+    daysAgo === null ? 'var(--color-line)' :
+    daysAgo <= 1 ? 'var(--color-green)' :
+    daysAgo <= 7 ? 'var(--color-amber)' : 'var(--color-ink-3)'
   return (
     <span
       style={{
@@ -62,15 +87,21 @@ export default async function DashboardPage() {
     })
   )
 
-  const [activeUsers, newSignups, topEvents, liveCount, topCompanies] = await Promise.all([
+  const [activeUsers, newSignups, topEvents, liveCount, topCompanies, eventsOverTime, activeUsersOverTime, companyScores] = await Promise.all([
     getActiveUsers(),
     getNewSignups(),
     getTopEvents(),
     getLiveCount(),
     getTopCompanies(),
+    getEventsOverTime(14),
+    getActiveUsersOverTime(14),
+    scoreAllCompanies(),
   ])
 
   const topEventsForChart = topEvents.slice(0, 8).map(e => ({ label: e.name, value: e.count }))
+  const activeUsersTrend = trendChipProps(computeTrend(activeUsers.last7, activeUsers.prior7))
+  const newSignupsTrend = trendChipProps(computeTrend(newSignups.last7, newSignups.prior7))
+  const scoreByDomain = new Map(companyScores.map(s => [s.domain, s]))
 
   return (
     <AppShell>
@@ -106,7 +137,7 @@ export default async function DashboardPage() {
           label="Active users · 7d"
           value={activeUsers.last7}
           sub="identified, ≥1 event"
-          trend={{ direction: 'up', label: '12%' }}
+          trend={activeUsersTrend}
         />
         <MetricCard
           label="Active users · 30d"
@@ -117,7 +148,7 @@ export default async function DashboardPage() {
           label="New signups · 7d"
           value={newSignups.last7}
           sub={`${newSignups.last30} in last 30 days`}
-          trend={{ direction: 'up', label: '8%' }}
+          trend={newSignupsTrend}
         />
         <MetricCard
           label="Live · last 60s"
@@ -127,7 +158,37 @@ export default async function DashboardPage() {
         />
       </div>
 
-      {/* ── Charts row ── */}
+      {/* ── Charts row 1: events over time + top events ── */}
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: '1fr 380px',
+          gap: '1rem',
+          marginBottom: '1rem',
+          alignItems: 'start',
+        }}
+        className="charts-row"
+      >
+        <Card>
+          <SectionHeading>Events over time</SectionHeading>
+          {eventsOverTime.every(p => p.count === 0) ? (
+            <p style={{ fontSize: '0.8125rem', color: 'var(--color-ink-3)' }}>No events recorded yet.</p>
+          ) : (
+            <EventsOverTimeChart data={eventsOverTime} />
+          )}
+        </Card>
+
+        <Card>
+          <SectionHeading>Top events</SectionHeading>
+          {topEvents.length === 0 ? (
+            <p style={{ fontSize: '0.8125rem', color: 'var(--color-ink-3)' }}>No events recorded yet.</p>
+          ) : (
+            <TopEventsChart items={topEventsForChart} />
+          )}
+        </Card>
+      </div>
+
+      {/* ── Charts row 2: active users trend + retention curve (placeholder) ── */}
       <div
         style={{
           display: 'grid',
@@ -139,18 +200,31 @@ export default async function DashboardPage() {
         className="charts-row"
       >
         <Card>
-          <BarChartPlaceholder label="Events over time" />
+          <SectionHeading>Active users trend</SectionHeading>
+          {activeUsersOverTime.every(p => p.count === 0) ? (
+            <p style={{ fontSize: '0.8125rem', color: 'var(--color-ink-3)' }}>No identified active users yet.</p>
+          ) : (
+            <ActiveUsersTrendChart data={activeUsersOverTime} />
+          )}
         </Card>
 
         <Card>
-          <SectionHeading>Top events</SectionHeading>
-          {topEvents.length === 0 ? (
-            <p style={{ fontSize: '0.8125rem', color: 'var(--color-ink-3)' }}>No events recorded yet.</p>
-          ) : (
-            <HorizontalBarPlaceholder items={topEventsForChart} />
-          )}
+          <SectionHeading>Retention curve · D0→D30</SectionHeading>
+          <RetentionPlaceholder
+            title="Not available yet"
+            description="Retention requires a cohort-return engine that hasn't been built yet — this is a later phase, not fake data."
+          />
         </Card>
       </div>
+
+      {/* ── Retention cohort heatmap (placeholder — same reason as above) ── */}
+      <section style={{ marginBottom: '2.5rem' }}>
+        <SectionHeading>Retention cohorts</SectionHeading>
+        <RetentionPlaceholder
+          title="Retention engine not built yet"
+          description="A cohort heatmap needs day-by-day return-visit data, which C-thru doesn't compute yet. Flagging this rather than showing invented numbers — this is scoped as a later phase."
+        />
+      </section>
 
       {/* ── Companies table ── */}
       <section style={{ marginBottom: '2.5rem' }}>
@@ -194,7 +268,9 @@ export default async function DashboardPage() {
                 </tr>
               </thead>
               <tbody>
-                {topCompanies.map((c, i) => (
+                {topCompanies.map((c, i) => {
+                  const score = scoreByDomain.get(c.domain)
+                  return (
                   <tr
                     key={c.domain}
                     style={{
@@ -236,17 +312,22 @@ export default async function DashboardPage() {
                     </td>
                     <td style={{ padding: '0.875rem 1.25rem', textAlign: 'right' }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: '0.375rem' }}>
-                        <FreshnessDot daysAgo={1} />
+                        <FreshnessDot daysAgo={daysAgoFrom(c.lastEventAt)} />
                         <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.8125rem', color: 'var(--color-ink-2)' }}>
                           {c.eventCount.toLocaleString()}
                         </span>
                       </div>
                     </td>
                     <td style={{ padding: '0.875rem 1.25rem', textAlign: 'right' }}>
-                      <ScoreBar met={3} total={5} />
+                      {score ? (
+                        <ScoreBar met={score.rulesMet} total={score.rulesTotal} />
+                      ) : (
+                        <span style={{ fontSize: '0.75rem', color: 'var(--color-ink-3)' }}>No rules set</span>
+                      )}
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           </Card>
