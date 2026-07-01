@@ -41,5 +41,26 @@ services:
       db:
         condition: service_healthy
 
+  # Retention cleanup service (D-31) — C-thru's first scheduled background job.
+  # Runs nightly, deletes expired session recordings by-session (no orphaned chunks).
+  # SCOPE: imports only the cleanup module and DB client — never the send/trigger surface.
+  # The D-26 grep test is updated to assert this boundary (see actLoopContracts.test.ts).
+  cleanup:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: postgres://cthru:cthru@db:5432/cthru
+      NODE_ENV: production
+      # Run nightly at 02:00 UTC. Uses node-cron inside the container.
+      CLEANUP_CRON: "0 2 * * *"
+    env_file:
+      - .env.local
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["node", "--import", "tsx/esm", "scripts/cleanup.ts"]
+
 volumes:
   postgres-data:

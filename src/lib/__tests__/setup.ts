@@ -43,6 +43,21 @@ beforeAll(async () => {
 
 afterEach(async () => {
   const { db } = await import('../db')
+  // Session Replay tables (chunks depend on sessions)
+  await db.query(`
+    TRUNCATE TABLE
+      session_recording_chunks,
+      session_recordings
+    RESTART IDENTITY
+  `)
+  // Reset replay_settings singleton to migration defaults
+  await db.query(`
+    UPDATE replay_settings
+    SET enabled = false, retention_days = 30, sample_rate = 1.0,
+        acknowledged_at = NULL, acknowledged_clause_version = NULL,
+        updated_at = NOW()
+    WHERE id = 1
+  `)
   // Act Loop tables first (FK order: dependents before parents)
   await db.query(`
     TRUNCATE TABLE

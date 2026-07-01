@@ -108,6 +108,49 @@ describe('D-26 — send actions are single-account only, no batch endpoint', () 
 })
 
 // ---------------------------------------------------------------------------
+// D-31 CLEANUP SCOPE BOUNDARY (updated D-26 grep test for v0.5)
+//
+// The retention cleanup service is C-thru's first scheduled background job.
+// It must ONLY import the cleanup module and the DB client — never the
+// send/trigger surface. This test asserts that boundary in both directions.
+// ---------------------------------------------------------------------------
+
+describe('D-31 — cleanup service scope boundary (updated D-26 grep test)', () => {
+  const CLEANUP_ENTRY = join(process.cwd(), 'scripts/cleanup.ts')
+  const SEND_TRIGGER_PATTERN = /\b(sendSlack|recordCopy|evaluateTriggers|createTriggeredDraft)\b/
+
+  it('cleanup service entry point exists (D-31 first background job)', () => {
+    try {
+      readFileSync(CLEANUP_ENTRY, 'utf-8')
+    } catch {
+      throw new Error('scripts/cleanup.ts does not exist — D-31 cleanup service not found')
+    }
+  })
+
+  it('cleanup service entry point does NOT import send/trigger surface', () => {
+    const content = readFileSync(CLEANUP_ENTRY, 'utf-8')
+    expect(
+      SEND_TRIGGER_PATTERN.test(content),
+      'scripts/cleanup.ts references send/trigger surface — violates D-31 scope boundary'
+    ).toBe(false)
+  })
+
+  it('cleanup module (replay/cleanup.ts) does NOT import send/trigger surface', () => {
+    const abs = join(SRC_DIR, 'lib/replay/cleanup.ts')
+    const content = readFileSync(abs, 'utf-8')
+    expect(
+      SEND_TRIGGER_PATTERN.test(content),
+      'src/lib/replay/cleanup.ts references send/trigger surface — violates D-31 scope boundary'
+    ).toBe(false)
+  })
+
+  it('docker-compose.yml defines a cleanup service (D-31 single docker compose up)', () => {
+    const composeContent = readFileSync(join(process.cwd(), 'docker-compose.yml'), 'utf-8')
+    expect(composeContent).toContain('cleanup:')
+  })
+})
+
+// ---------------------------------------------------------------------------
 // 12. PLACEHOLDER GUARD
 // ---------------------------------------------------------------------------
 
