@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { BarChart, Bar, Cell, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { chartColors, tickStyle, tooltipContentStyle, tooltipLabelStyle, readinessColor } from './chartTheme'
 
@@ -19,6 +20,7 @@ function truncateLabel(label: string): string {
 }
 
 export default function ReadinessBarChart({ items }: { items: ReadinessItem[] }) {
+  const router = useRouter()
   const data = items.map(i => ({
     ...i,
     pct: i.total === 0 ? 0 : Math.round((i.met / i.total) * 100),
@@ -54,7 +56,12 @@ export default function ReadinessBarChart({ items }: { items: ReadinessItem[] })
         />
         <Bar dataKey="pct" radius={[0, 3, 3, 0]} maxBarSize={16}>
           {data.map(d => (
-            <Cell key={d.domain} fill={readinessColor(d.pct)} />
+            <Cell 
+              key={d.domain} 
+              fill={readinessColor(d.pct)} 
+              onClick={() => router.push(`/accounts/${d.domain}`)}
+              style={{ cursor: 'pointer' }}
+            />
           ))}
         </Bar>
       </BarChart>

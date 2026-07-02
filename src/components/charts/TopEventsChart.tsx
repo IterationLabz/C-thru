@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { chartColors, tickStyle, tooltipContentStyle, tooltipLabelStyle, tooltipItemStyle } from './chartTheme'
 
@@ -9,6 +10,7 @@ export interface TopEventItem {
 }
 
 export default function TopEventsChart({ items }: { items: TopEventItem[] }) {
+  const router = useRouter()
   const height = Math.max(items.length * 34, 60)
 
   return (
@@ -35,7 +37,18 @@ export default function TopEventsChart({ items }: { items: TopEventItem[] }) {
           formatter={value => [Number(value).toLocaleString(), 'Count']}
           cursor={{ fill: chartColors.paper2 }}
         />
-        <Bar dataKey="value" fill={chartColors.accent} radius={[0, 3, 3, 0]} maxBarSize={16} />
+        <Bar 
+          dataKey="value" 
+          fill={chartColors.accent} 
+          radius={[0, 3, 3, 0]} 
+          maxBarSize={16} 
+          onClick={(data: any) => {
+            if (data && data.label) {
+              router.push(`/ask?q=${encodeURIComponent(`Show count for event ${data.label}`)}`)
+            }
+          }}
+          style={{ cursor: 'pointer' }}
+        />
       </BarChart>
     </ResponsiveContainer>
   )

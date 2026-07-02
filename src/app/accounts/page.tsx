@@ -143,7 +143,9 @@ export default async function AccountsPage() {
                       </div>
                     </td>
                     <td style={{ padding: '1rem 1.25rem' }}>
-                      <ScoreBar met={s.rulesMet} total={s.rulesTotal} />
+                      <Link href={`/accounts/${s.domain}`} style={{ textDecoration: 'none', display: 'block' }}>
+                        <ScoreBar met={s.rulesMet} total={s.rulesTotal} />
+                      </Link>
                     </td>
                     <td style={{ padding: '1rem 1.25rem' }}>
                       <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--color-ink-3)' }}>

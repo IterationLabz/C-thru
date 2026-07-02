@@ -1,4 +1,5 @@
 import type { Metadata } from 'next'
+import Link from 'next/link'
 import { listFunnels, evaluateFunnel } from '@/lib/funnelEngine'
 import { saveFunnelAction, deleteFunnelAction } from './actions'
 import AppShell from '@/components/AppShell'
@@ -85,7 +86,11 @@ export default async function FunnelsPage() {
             <Card key={funnel.id}>
               <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '0.25rem' }}>
                 <div>
-                  <p style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--color-ink)' }}>{funnel.name}</p>
+                  <p style={{ fontWeight: 700, fontSize: '0.9375rem', color: 'var(--color-ink)' }}>
+                    <Link href={`/ask?q=${encodeURIComponent(`show funnel for ${funnel.name}`)}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                      {funnel.name}
+                    </Link>
+                  </p>
                   <p style={{ fontSize: '0.75rem', color: 'var(--color-ink-3)', fontFamily: 'var(--font-mono)', marginTop: '0.125rem' }}>
                     {funnel.mode} · {funnel.windowDays}d · {funnel.steps.length} steps
                   </p>

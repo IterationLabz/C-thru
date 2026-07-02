@@ -61,9 +61,19 @@ export default async function JourneyPage({ params }: { params: Promise<{ userId
           </p>
         )}
         <div style={{ display: 'flex', gap: '0.5rem', marginTop: '0.875rem', flexWrap: 'wrap' }}>
-          <Badge color="neutral">{events.length} events total</Badge>
-          {preCount > 0 && <Badge color="neutral">{preCount} pre-identify</Badge>}
-          {postCount > 0 && <Badge color="accent">{postCount} post-identify</Badge>}
+          <Link href={`/ask?q=${encodeURIComponent(`count events for user ${decodedId}`)}`} style={{ textDecoration: 'none' }}>
+            <Badge color="neutral">{events.length} events total</Badge>
+          </Link>
+          {preCount > 0 && (
+            <Link href={`/ask?q=${encodeURIComponent(`count anonymous events for user ${decodedId}`)}`} style={{ textDecoration: 'none' }}>
+              <Badge color="neutral">{preCount} pre-identify</Badge>
+            </Link>
+          )}
+          {postCount > 0 && (
+            <Link href={`/ask?q=${encodeURIComponent(`count identified events for user ${decodedId}`)}`} style={{ textDecoration: 'none' }}>
+              <Badge color="accent">{postCount} post-identify</Badge>
+            </Link>
+          )}
         </div>
       </div>
 
@@ -160,19 +170,21 @@ export default async function JourneyPage({ params }: { params: Promise<{ userId
                     }}
                   >
                     {/* Dot */}
-                    <div
-                      style={{
-                        position: 'absolute',
-                        left: '3px',
-                        top: '5px',
-                        width: '9px',
-                        height: '9px',
-                        borderRadius: '50%',
-                        background: evt.postIdentification ? 'var(--color-accent)' : 'var(--color-ink-3)',
-                        border: '2px solid var(--color-card)',
-                        zIndex: 1,
-                      }}
-                    />
+                    <Link href={`/ask?q=${encodeURIComponent(`show event at ${evt.receivedAt} for user ${decodedId}`)}`}>
+                      <div
+                        style={{
+                          position: 'absolute',
+                          left: '3px',
+                          top: '5px',
+                          width: '9px',
+                          height: '9px',
+                          borderRadius: '50%',
+                          background: evt.postIdentification ? 'var(--color-accent)' : 'var(--color-ink-3)',
+                          border: '2px solid var(--color-card)',
+                          zIndex: 1,
+                        }}
+                      />
+                    </Link>
 
                     {/* Timestamp */}
                     <span
@@ -199,7 +211,9 @@ export default async function JourneyPage({ params }: { params: Promise<{ userId
                             color: evt.postIdentification ? 'var(--color-ink)' : 'var(--color-ink-2)',
                           }}
                         >
-                          {evt.name}
+                          <Link href={`/ask?q=${encodeURIComponent(`show events named ${evt.name} for user ${decodedId}`)}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                            {evt.name}
+                          </Link>
                         </span>
                         {!evt.postIdentification && (
                           <Badge color="neutral">[anonymous]</Badge>

@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { BarChart, Bar, Cell, LabelList, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { chartColors, tickStyle, tooltipContentStyle, tooltipLabelStyle } from './chartTheme'
 
@@ -17,6 +18,7 @@ function stepColor(index: number, total: number): string {
 }
 
 export default function FunnelDropoffChart({ steps }: { steps: FunnelStepDatum[] }) {
+  const router = useRouter()
   const height = Math.max(steps.length * 44, 80)
 
   return (
@@ -48,7 +50,12 @@ export default function FunnelDropoffChart({ steps }: { steps: FunnelStepDatum[]
         />
         <Bar dataKey="count" radius={[0, 3, 3, 0]} maxBarSize={22}>
           {steps.map((s, i) => (
-            <Cell key={s.eventName} fill={stepColor(i, steps.length)} />
+            <Cell 
+              key={s.eventName} 
+              fill={stepColor(i, steps.length)} 
+              onClick={() => router.push(`/ask?q=${encodeURIComponent(`Show users who reached ${s.eventName}`)}`)}
+              style={{ cursor: 'pointer' }}
+            />
           ))}
           <LabelList
             dataKey="count"

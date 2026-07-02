@@ -102,7 +102,11 @@ export default async function OutreachPage() {
                         </span>
                         {draft.created_by === 'trigger' && <Badge color="accent">Triggered</Badge>}
                       </div>
-                      {score && <ScoreBar met={score.rulesMet} total={score.rulesTotal} />}
+                      {score && (
+                        <Link href={`/accounts/${draft.domain}`} style={{ textDecoration: 'none', display: 'block', marginTop: '0.25rem' }}>
+                          <ScoreBar met={score.rulesMet} total={score.rulesTotal} />
+                        </Link>
+                      )}
                       <p
                         style={{
                           fontSize: '0.8125rem',
@@ -198,12 +202,14 @@ export default async function OutreachPage() {
                     <span style={{ fontSize: '0.875rem', color: 'var(--color-ink-3)' }}>✕</span>
                   )}
                   <div>
-                    <span style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--color-ink)' }}>
-                      {displayName(draft.domain)}
-                    </span>
-                    <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--color-ink-3)', marginLeft: '0.5rem' }}>
-                      {draft.domain}
-                    </span>
+                    <Link href={`/accounts/${draft.domain}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                      <span style={{ fontWeight: 600, fontSize: '0.875rem', color: 'var(--color-ink)' }}>
+                        {displayName(draft.domain)}
+                      </span>
+                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--color-ink-3)', marginLeft: '0.5rem' }}>
+                        {draft.domain}
+                      </span>
+                    </Link>
                   </div>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: '0.875rem' }}>

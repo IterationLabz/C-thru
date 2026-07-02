@@ -133,29 +133,37 @@ export default async function DashboardPage() {
           marginBottom: '2.5rem',
         }}
       >
-        <MetricCard
-          label="Active users · 7d"
-          value={activeUsers.last7}
-          sub="identified, ≥1 event"
-          trend={activeUsersTrend}
-        />
-        <MetricCard
-          label="Active users · 30d"
-          value={activeUsers.last30}
-          sub="identified users with ≥1 event"
-        />
-        <MetricCard
-          label="New signups · 7d"
-          value={newSignups.last7}
-          sub={`${newSignups.last30} in last 30 days`}
-          trend={newSignupsTrend}
-        />
-        <MetricCard
-          label="Live · last 60s"
-          value={liveCount}
-          sub="events ingested"
-          live
-        />
+        <Link href="/journey" style={{ textDecoration: 'none' }}>
+          <MetricCard
+            label="Active users · 7d"
+            value={activeUsers.last7}
+            sub="identified, ≥1 event"
+            trend={activeUsersTrend}
+          />
+        </Link>
+        <Link href="/journey" style={{ textDecoration: 'none' }}>
+          <MetricCard
+            label="Active users · 30d"
+            value={activeUsers.last30}
+            sub="identified users with ≥1 event"
+          />
+        </Link>
+        <Link href="/journey" style={{ textDecoration: 'none' }}>
+          <MetricCard
+            label="New signups · 7d"
+            value={newSignups.last7}
+            sub={`${newSignups.last30} in last 30 days`}
+            trend={newSignupsTrend}
+          />
+        </Link>
+        <Link href="/ask?q=show+events+from+last+60+seconds" style={{ textDecoration: 'none' }}>
+          <MetricCard
+            label="Live · last 60s"
+            value={liveCount}
+            sub="events ingested"
+            live
+          />
+        </Link>
       </div>
 
       {/* ── Charts row 1: events over time + top events ── */}
@@ -319,11 +327,13 @@ export default async function DashboardPage() {
                       </div>
                     </td>
                     <td style={{ padding: '0.875rem 1.25rem', textAlign: 'right' }}>
-                      {score ? (
-                        <ScoreBar met={score.rulesMet} total={score.rulesTotal} />
-                      ) : (
-                        <span style={{ fontSize: '0.75rem', color: 'var(--color-ink-3)' }}>No rules set</span>
-                      )}
+                      <Link href={`/accounts/${c.domain}`} style={{ textDecoration: 'none', display: 'block' }}>
+                        {score ? (
+                          <ScoreBar met={score.rulesMet} total={score.rulesTotal} />
+                        ) : (
+                          <span style={{ fontSize: '0.75rem', color: 'var(--color-ink-3)' }}>No rules set</span>
+                        )}
+                      </Link>
                     </td>
                   </tr>
                   )
@@ -354,52 +364,56 @@ export default async function DashboardPage() {
             }}
           >
             {pinnedResults.map(({ pq, result, error }) => (
-              <Card key={pq.id}>
-                <p
-                  style={{
-                    fontSize: '0.8125rem',
-                    color: 'var(--color-ink-2)',
-                    marginBottom: '0.75rem',
-                    lineHeight: 1.45,
-                  }}
-                >
-                  {pq.question}
-                </p>
-                {error ? (
-                  <p style={{ fontSize: '0.8125rem', color: 'var(--color-red)' }}>{error}</p>
-                ) : result && result.rows.length === 1 && Object.keys(result.rows[0]!).length === 1 ? (
+              <Link key={pq.id} href={`/ask?q=${encodeURIComponent(pq.question)}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                <Card>
                   <p
                     style={{
-                      fontFamily: 'var(--font-display)',
-                      fontSize: '2.25rem',
-                      fontWeight: 500,
-                      letterSpacing: '-0.02em',
-                      color: 'var(--color-ink)',
+                      fontSize: '0.8125rem',
+                      color: 'var(--color-ink-2)',
+                      marginBottom: '0.75rem',
+                      lineHeight: 1.45,
                     }}
                   >
-                    {String(Object.values(result.rows[0]!)[0])}
+                    {pq.question}
                   </p>
-                ) : result ? (
-                  <p style={{ fontSize: '0.8125rem', color: 'var(--color-ink-3)' }}>
-                    {result.rowCount} row{result.rowCount === 1 ? '' : 's'}
-                  </p>
-                ) : null}
-                <form action={unpinQueryAction.bind(null, pq.id)} style={{ marginTop: '0.875rem' }}>
-                  <button
-                    type="submit"
-                    style={{
-                      fontSize: '0.75rem',
-                      color: 'var(--color-ink-3)',
-                      background: 'transparent',
-                      border: 'none',
-                      cursor: 'pointer',
-                      padding: 0,
-                    }}
-                  >
-                    Unpin
-                  </button>
-                </form>
-              </Card>
+                  {error ? (
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--color-red)' }}>{error}</p>
+                  ) : result && result.rows.length === 1 && Object.keys(result.rows[0]!).length === 1 ? (
+                    <p
+                      style={{
+                        fontFamily: 'var(--font-display)',
+                        fontSize: '2.25rem',
+                        fontWeight: 500,
+                        letterSpacing: '-0.02em',
+                        color: 'var(--color-ink)',
+                      }}
+                    >
+                      {String(Object.values(result.rows[0]!)[0])}
+                    </p>
+                  ) : result ? (
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--color-ink-3)' }}>
+                      {result.rowCount} row{result.rowCount === 1 ? '' : 's'}
+                    </p>
+                  ) : null}
+                  <form action={unpinQueryAction.bind(null, pq.id)} style={{ marginTop: '0.875rem' }}>
+                    <button
+                      type="submit"
+                      style={{
+                        fontSize: '0.75rem',
+                        color: 'var(--color-ink-3)',
+                        background: 'transparent',
+                        border: 'none',
+                        cursor: 'pointer',
+                        padding: 0,
+                        position: 'relative',
+                        zIndex: 2,
+                      }}
+                    >
+                      Unpin
+                    </button>
+                  </form>
+                </Card>
+              </Link>
             ))}
           </div>
         </section>

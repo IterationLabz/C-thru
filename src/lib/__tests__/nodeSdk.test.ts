@@ -10,7 +10,7 @@ function makeClient() {
 
 function lastFetchBody() {
   const calls = (global.fetch as ReturnType<typeof vi.fn>).mock.calls
-  return JSON.parse(calls[calls.length - 1][1].body)
+  return JSON.parse(calls[calls.length - 1]![1].body)
 }
 
 beforeEach(() => {
@@ -27,7 +27,7 @@ afterEach(() => {
 describe('Cthru.trackServer() — happy path', () => {
   it('sends a POST to /api/ingest with the serverKey', async () => {
     await makeClient().trackServer('payment_succeeded', { userId: 'u1' })
-    const [url, opts] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]
+    const [url, opts] = (global.fetch as ReturnType<typeof vi.fn>).mock.calls[0]!
     expect(url).toBe(`${HOST}/api/ingest`)
     expect(opts.method).toBe('POST')
     const body = JSON.parse(opts.body)

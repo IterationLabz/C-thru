@@ -17,7 +17,7 @@ export function ReplayPlayer({ stream }: ReplayPlayerProps) {
     // Decompress stream and parse rrweb events from the Uint8Array.
     // The stream is the raw decompressed bytes; parse as UTF-8 JSON.
     const bytes = new Uint8Array(stream)
-    let events: unknown[]
+    let events: any[]
     try {
       const text = new TextDecoder().decode(bytes)
       events = JSON.parse(text)
@@ -40,7 +40,7 @@ export function ReplayPlayer({ stream }: ReplayPlayerProps) {
     })
 
     return () => {
-      player.$destroy()
+      ;(player as any).$destroy()
       if (containerRef.current) containerRef.current.innerHTML = ''
     }
   }, [stream])

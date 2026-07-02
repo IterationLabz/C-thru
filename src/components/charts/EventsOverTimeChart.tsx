@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { chartColors, gridStroke, tickStyle, tooltipContentStyle, tooltipLabelStyle, tooltipItemStyle } from './chartTheme'
 
@@ -14,6 +15,7 @@ function formatTick(date: string): string {
 }
 
 export default function EventsOverTimeChart({ data }: { data: EventsOverTimePoint[] }) {
+  const router = useRouter()
   return (
     <ResponsiveContainer width="100%" height={160}>
       <BarChart data={data} margin={{ top: 4, right: 4, left: -20, bottom: 0 }}>
@@ -36,7 +38,17 @@ export default function EventsOverTimeChart({ data }: { data: EventsOverTimePoin
           formatter={value => [Number(value).toLocaleString(), 'Events']}
           cursor={{ fill: chartColors.paper2 }}
         />
-        <Bar dataKey="count" fill={chartColors.accent} radius={[3, 3, 0, 0]} />
+        <Bar 
+          dataKey="count" 
+          fill={chartColors.accent} 
+          radius={[3, 3, 0, 0]} 
+          onClick={(data: any) => {
+            if (data && data.date) {
+              router.push(`/ask?q=${encodeURIComponent(`Show events on ${data.date}`)}`)
+            }
+          }}
+          style={{ cursor: 'pointer' }}
+        />
       </BarChart>
     </ResponsiveContainer>
   )

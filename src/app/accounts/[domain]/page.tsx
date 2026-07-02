@@ -184,7 +184,9 @@ export default async function AccountDetailPage({ params }: { params: Promise<{ 
                 </span>
                 <div>
                   <p style={{ fontSize: '0.875rem', fontWeight: 600, color: 'var(--color-ink)' }}>
-                    {r.label}
+                    <Link href="/settings" style={{ textDecoration: 'none', color: 'inherit' }}>
+                      {r.label}
+                    </Link>
                   </p>
                   <p style={{ fontSize: '0.8125rem', color: 'var(--color-ink-3)', marginTop: '0.125rem' }}>
                     {r.value}

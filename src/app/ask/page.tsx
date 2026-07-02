@@ -11,7 +11,9 @@ import Link from 'next/link'
 export const metadata: Metadata = { title: 'Ask' }
 export const dynamic = 'force-dynamic'
 
-export default async function AskPage() {
+export default async function AskPage({ searchParams }: { searchParams: Promise<{ [key: string]: string | string[] | undefined }> }) {
+  const sp = await searchParams
+  const q = typeof sp.q === 'string' ? sp.q : ''
   const hasLlmKey = Boolean(getLlmKeyHint())
   const pinned = await listPinnedQueries()
 
@@ -50,7 +52,7 @@ export default async function AskPage() {
 
       {/* ── Ask form (client component) ── */}
       <Card style={{ marginBottom: '2.5rem' }}>
-        <AskForm hasLlmKey={hasLlmKey} />
+        <AskForm hasLlmKey={hasLlmKey} initialQuestion={q} />
       </Card>
 
       {/* ── Pinned queries ── */}
@@ -74,30 +76,32 @@ export default async function AskPage() {
           </div>
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(220px, 1fr))', gap: '1rem' }}>
             {pinnedWithValues.map(({ pq, result, error }) => (
-              <Card key={pq.id}>
-                <p style={{ fontSize: '0.8125rem', color: 'var(--color-ink-2)', marginBottom: '0.75rem', lineHeight: 1.45 }}>
-                  {pq.question}
-                </p>
-                {error ? (
-                  <p style={{ fontSize: '0.8125rem', color: 'var(--color-red)' }}>{error}</p>
-                ) : result && result.rows.length === 1 && Object.keys(result.rows[0]!).length === 1 ? (
-                  <p
-                    style={{
-                      fontFamily: 'var(--font-display)',
-                      fontSize: '2.25rem',
-                      fontWeight: 500,
-                      letterSpacing: '-0.02em',
-                      color: 'var(--color-ink)',
-                    }}
-                  >
-                    {String(Object.values(result.rows[0]!)[0])}
+              <Link key={pq.id} href={`/ask?q=${encodeURIComponent(pq.question)}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                <Card>
+                  <p style={{ fontSize: '0.8125rem', color: 'var(--color-ink-2)', marginBottom: '0.75rem', lineHeight: 1.45 }}>
+                    {pq.question}
                   </p>
-                ) : result ? (
-                  <p style={{ fontSize: '0.8125rem', color: 'var(--color-ink-3)' }}>
-                    {result.rowCount} row{result.rowCount === 1 ? '' : 's'}
-                  </p>
-                ) : null}
-              </Card>
+                  {error ? (
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--color-red)' }}>{error}</p>
+                  ) : result && result.rows.length === 1 && Object.keys(result.rows[0]!).length === 1 ? (
+                    <p
+                      style={{
+                        fontFamily: 'var(--font-display)',
+                        fontSize: '2.25rem',
+                        fontWeight: 500,
+                        letterSpacing: '-0.02em',
+                        color: 'var(--color-ink)',
+                      }}
+                    >
+                      {String(Object.values(result.rows[0]!)[0])}
+                    </p>
+                  ) : result ? (
+                    <p style={{ fontSize: '0.8125rem', color: 'var(--color-ink-3)' }}>
+                      {result.rowCount} row{result.rowCount === 1 ? '' : 's'}
+                    </p>
+                  ) : null}
+                </Card>
+              </Link>
             ))}
           </div>
         </section>

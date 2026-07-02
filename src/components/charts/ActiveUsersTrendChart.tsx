@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts'
 import { chartColors, gridStroke, tickStyle, tooltipContentStyle, tooltipLabelStyle, tooltipItemStyle } from './chartTheme'
 
@@ -14,6 +15,7 @@ function formatTick(date: string): string {
 }
 
 export default function ActiveUsersTrendChart({ data }: { data: ActiveUsersPoint[] }) {
+  const router = useRouter()
   return (
     <ResponsiveContainer width="100%" height={120}>
       <LineChart data={data} margin={{ top: 4, right: 8, left: -28, bottom: 0 }}>
@@ -41,7 +43,16 @@ export default function ActiveUsersTrendChart({ data }: { data: ActiveUsersPoint
           stroke={chartColors.accent}
           strokeWidth={2}
           dot={false}
-          activeDot={{ r: 4, fill: chartColors.accent }}
+          activeDot={{ 
+            r: 4, 
+            fill: chartColors.accent,
+            onClick: (_: any, payload: any) => {
+              if (payload && payload.payload && payload.payload.date) {
+                router.push(`/ask?q=${encodeURIComponent(`Show active users on ${payload.payload.date}`)}`)
+              }
+            },
+            style: { cursor: 'pointer' }
+          }}
         />
       </LineChart>
     </ResponsiveContainer>

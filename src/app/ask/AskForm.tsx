@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useState, useTransition, useEffect } from 'react'
 import type { AskResult } from '@/lib/ask'
 import type { Trend } from '@/lib/trendComputer'
 import { pinQueryAction } from './actions'
@@ -88,12 +88,18 @@ const inputStyle: React.CSSProperties = {
   lineHeight: 1.55,
 }
 
-export function AskForm({ hasLlmKey }: { hasLlmKey: boolean }) {
-  const [question, setQuestion] = useState('')
+export function AskForm({ hasLlmKey, initialQuestion = '' }: { hasLlmKey: boolean, initialQuestion?: string }) {
+  const [question, setQuestion] = useState(initialQuestion)
   const [state, setState] = useState<State>({ status: 'idle' })
   const [isPending, startTransition] = useTransition()
   const [pinned, setPinned] = useState(false)
   const [sqlOpen, setSqlOpen] = useState(false)
+
+  useEffect(() => {
+    if (initialQuestion) {
+      setQuestion(initialQuestion)
+    }
+  }, [initialQuestion])
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()

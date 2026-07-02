@@ -77,22 +77,24 @@ export default async function BriefPage() {
           { label: 'Active users · 30d', value: facts.activeUsers30d },
           { label: 'New signups · 7d', value: facts.newSignups7d },
         ].map(({ label, value }) => (
-          <Card key={label} style={{ textAlign: 'center' }}>
-            <p
-              style={{
-                fontFamily: 'var(--font-display)',
-                fontSize: '2.5rem',
-                fontWeight: 500,
-                letterSpacing: '-0.03em',
-                color: 'var(--color-ink)',
-                lineHeight: 1,
-                marginBottom: '0.375rem',
-              }}
-            >
-              {value}
-            </p>
-            <p style={{ fontSize: '0.75rem', color: 'var(--color-ink-3)' }}>{label}</p>
-          </Card>
+          <Link href="/journey" key={label} style={{ textDecoration: 'none', color: 'inherit', display: 'block' }}>
+            <Card style={{ textAlign: 'center' }}>
+              <p
+                style={{
+                  fontFamily: 'var(--font-display)',
+                  fontSize: '2.5rem',
+                  fontWeight: 500,
+                  letterSpacing: '-0.03em',
+                  color: 'var(--color-ink)',
+                  lineHeight: 1,
+                  marginBottom: '0.375rem',
+                }}
+              >
+                {value}
+              </p>
+              <p style={{ fontSize: '0.75rem', color: 'var(--color-ink-3)' }}>{label}</p>
+            </Card>
+          </Link>
         ))}
       </div>
 
@@ -115,7 +117,9 @@ export default async function BriefPage() {
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
               <div>
                 <p style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--color-ink)', marginBottom: '0.25rem' }}>
-                  {facts.topCompany}
+                  <Link href={`/accounts/${facts.topCompany}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                    {facts.topCompany}
+                  </Link>
                 </p>
                 <p style={{ fontSize: '0.8125rem', color: 'var(--color-ink-3)' }}>
                   {facts.topCompanyScore.rulesMet}/{facts.topCompanyScore.rulesTotal} readiness rules met
@@ -182,11 +186,13 @@ export default async function BriefPage() {
                     style={{ borderBottom: i < facts.topUsers.length - 1 ? '1px solid var(--color-line)' : 'none' }}
                   >
                     <td style={{ padding: '0.875rem 1.25rem', color: 'var(--color-ink)' }}>
-                      {u.email ?? (
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--color-ink-3)' }}>
-                          {u.userId}
-                        </span>
-                      )}
+                      <Link href={`/journey/${u.userId}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                        {u.email ?? (
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--color-ink-3)' }}>
+                            {u.userId}
+                          </span>
+                        )}
+                      </Link>
                     </td>
                     <td
                       style={{

@@ -67,14 +67,18 @@ export default async function JourneyIndexPage() {
                   style={{ borderBottom: i < users.length - 1 ? '1px solid var(--color-line)' : 'none' }}
                 >
                   <td style={{ padding: '0.875rem 1.25rem', color: 'var(--color-ink)', fontWeight: 500 }}>
-                    {u.email ?? (
-                      <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--color-ink-3)' }}>
-                        {u.userId}
-                      </span>
-                    )}
+                    <Link href={`/journey/${encodeURIComponent(u.userId)}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                      {u.email ?? (
+                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--color-ink-3)' }}>
+                          {u.userId}
+                        </span>
+                      )}
+                    </Link>
                   </td>
                   <td style={{ padding: '0.875rem 1.25rem', textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: '0.8125rem', color: 'var(--color-ink-2)' }}>
-                    {u.eventCount}
+                    <Link href={`/journey/${encodeURIComponent(u.userId)}`} style={{ textDecoration: 'none', color: 'inherit' }}>
+                      {u.eventCount}
+                    </Link>
                   </td>
                   <td style={{ padding: '0.875rem 1.25rem', textAlign: 'right', fontFamily: 'var(--font-mono)', fontSize: '0.75rem', color: 'var(--color-ink-3)' }}>
                     {new Date(u.lastEventAt).toLocaleDateString()}
