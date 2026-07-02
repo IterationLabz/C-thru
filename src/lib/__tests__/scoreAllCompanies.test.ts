@@ -80,7 +80,6 @@ describe('scoreAllCompanies — set-based query proof (D-21)', () => {
 
     await buildSignalMaps(rules)
 
-    // @ts-expect-error — restore
     db.query = originalQuery
 
     // 5 signal maps = at most 5 queries (key_event_fired may be skipped if no key event rules)

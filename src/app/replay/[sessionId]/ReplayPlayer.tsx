@@ -3,6 +3,7 @@
 import { useEffect, useRef } from 'react'
 import rrwebPlayer from 'rrweb-player'
 import 'rrweb-player/dist/style.css'
+import type { eventWithTime } from '@rrweb/types'
 
 interface ReplayPlayerProps {
   stream: number[]  // serialised Uint8Array — JSON-safe for server→client transfer
@@ -17,10 +18,10 @@ export function ReplayPlayer({ stream }: ReplayPlayerProps) {
     // Decompress stream and parse rrweb events from the Uint8Array.
     // The stream is the raw decompressed bytes; parse as UTF-8 JSON.
     const bytes = new Uint8Array(stream)
-    let events: unknown[]
+    let events: eventWithTime[]
     try {
       const text = new TextDecoder().decode(bytes)
-      events = JSON.parse(text)
+      events = JSON.parse(text) as eventWithTime[]
     } catch {
       return
     }
@@ -40,7 +41,10 @@ export function ReplayPlayer({ stream }: ReplayPlayerProps) {
     })
 
     return () => {
-      player.$destroy()
+      // rrweb-player's types extend Svelte's SvelteComponent, whose declarations
+      // aren't resolvable here (svelte isn't a direct dependency), so $destroy
+      // is missing from the declared surface even though it exists at runtime.
+      ;(player as unknown as { $destroy(): void }).$destroy()
       if (containerRef.current) containerRef.current.innerHTML = ''
     }
   }, [stream])
